@@ -102,6 +102,7 @@ export default function Home() {
                 size="lg"
                 className="h-12 w-full px-5 text-sm sm:w-auto"
                 render={<a href="/report/lost" />}
+                nativeButton={false}
               >
                 <Search data-icon="inline-start" />
                 Report Lost Item
@@ -111,6 +112,7 @@ export default function Home() {
                 variant="outline"
                 className="h-12 w-full border-foreground px-5 text-sm sm:w-auto"
                 render={<a href="/report/found" />}
+                nativeButton={false}
               >
                 <Plus data-icon="inline-start" />
                 Report Found Item
