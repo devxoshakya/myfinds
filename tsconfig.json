@@ -1,0 +1,3 @@
+{
+  "extends": "@myfinds/config/tsconfig.base.json"
+}
