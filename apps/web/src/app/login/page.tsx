@@ -1,16 +1,11 @@
-"use client";
+import type { Metadata } from "next";
 
-import { useState } from "react";
+import AuthForm from "@/components/auth-form";
 
-import SignInForm from "@/components/sign-in-form";
-import SignUpForm from "@/components/sign-up-form";
+export const metadata: Metadata = {
+  title: "Log in",
+};
 
 export default function LoginPage() {
-  const [showSignIn, setShowSignIn] = useState(false);
-
-  return showSignIn ? (
-    <SignInForm onSwitchToSignUp={() => setShowSignIn(false)} />
-  ) : (
-    <SignUpForm onSwitchToSignIn={() => setShowSignIn(true)} />
-  );
+  return <AuthForm mode="login" />;
 }
