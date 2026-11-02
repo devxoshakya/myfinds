@@ -1,0 +1,48 @@
+// The central entity: one lost or found item report.
+// Search support (`searchVector` generated column + GIN indexes) lives in
+// prisma/sql/extensions.sql — Prisma cannot manage generated columns.
+// Full field documentation: docs/model.md §2.3.
+
+model Report {
+  id               String       @id @default(cuid())
+  number           Int          @unique @default(autoincrement()) // shown as MF-<number>
+  type             ReportType
+  reporterId       String
+  title            String
+  category         Category
+  description      String?
+  color            String?
+  brand            String?
+  eventDate        DateTime     @db.Date
+  eventTime        String? // optional "HH:mm", informational only
+  placeStationId   String
+  placeNote        String? // platform/gate/coach, max 120 chars (BR-01)
+  status           ReportStatus
+  needsAttention   Boolean      @default(false)
+  expiresAt        DateTime // creation + REPORT_TTL_DAYS (60)
+  closedAt         DateTime?
+
+  // Found-report custody fields (server-assigned only, never client input)
+  custodian        Custodian?
+  custodyStationId String?
+  receivedById     String?
+  receivedAt       DateTime?
+  storageRef       String? // shelf or bin label, set by staff (S6)
+  walkInNote       String? // counter drop-off note (S5, staff-only visible)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reporter       User                   @relation(fields: [reporterId], references: [id])
+  placeStation   Station                @relation("PlaceStation", fields: [placeStationId], references: [id])
+  custodyStation Station?               @relation("CustodyStation", fields: [custodyStationId], references: [id])
+  photos         Photo[]
+  questions      VerificationQuestion[]
+  lostMatches    Match[]                @relation("LostSide")
+  foundMatches   Match[]                @relation("FoundSide")
+  history        StatusHistory[]
+
+  @@index([type, category, status, expiresAt])
+  @@index([reporterId])
+  @@index([custodyStationId, status])
+}

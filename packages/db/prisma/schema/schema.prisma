@@ -1,6 +1,21 @@
+// Generator + datasource only. Domain models are split per concept:
+//   auth.prisma        Better Auth tables (user, session, account, verification)
+//   enums.prisma       All shared enums
+//   places.prisma      State, City, Station
+//   staff.prisma       StationStaff
+//   report.prisma      Report (central entity)
+//   photo.prisma       Photo (private R2 objects)
+//   question.prisma    VerificationQuestion (owner hidden detail)
+//   match.prisma       Match (rule-based pairing)
+//   claim.prisma       Claim + handover code metadata
+//   history.prisma     StatusHistory (append-only)
+//   notification.prisma Notification delivery log
+// All model docs live in docs/model.md; see also prisma/sql/extensions.sql
+// for the raw SQL pieces (pg_trgm, searchVector, append-only trigger).
+
 generator client {
   provider = "prisma-client"
-  output   = "../generated"
+  output = "../generated"
   moduleFormat = "esm"
   runtime = "bun"
 }

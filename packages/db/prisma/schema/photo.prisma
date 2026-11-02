@@ -1,0 +1,23 @@
+// Photos are private R2 objects (BR-12/BR-13). r2Key never leaves the server;
+// reads go through 5-minute presigned GET URLs after a photo:read check.
+// Upload kinds and per-kind limits:
+//   ITEM       up to 4 per report
+//   PROOF      up to 1, found reports only, private — never shown to claimant
+//   CLAIM_PROOF up to 2 per claim
+
+model Photo {
+  id           String    @id @default(cuid())
+  kind         PhotoKind
+  reportId     String?
+  claimId      String?
+  r2Key        String    @unique // reports/{reportId}/{kind}/{uuid}.{ext} — S8
+  contentType  String
+  sizeBytes    Int
+  position     Int       @default(0)
+  uploadedById String
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime? // soft delete; cron removes objects after retention
+
+  report Report? @relation(fields: [reportId], references: [id])
+  claim  Claim?  @relation(fields: [claimId], references: [id])
+}

@@ -1,0 +1,22 @@
+// Rule-based pairing of one lost and one found report (BR-08..BR-11).
+// One Match row per unique pair; matches with score >= MATCH_MIN_SCORE (0.50)
+// are kept, top MATCH_MAX_PER_REPORT (5) per report. Weights (BR-09):
+//   score = 0.30*place + 0.30*text + 0.20*date + 0.20*attributes
+
+model Match {
+  id             String      @id @default(cuid())
+  lostReportId   String
+  foundReportId  String
+  score          Float
+  scoreBreakdown Json // { place, text, date, attributes } sub-scores
+  status         MatchStatus @default(SUGGESTED)
+  attemptsUsed   Int         @default(0) // MAX_CLAIM_ATTEMPTS (3) rejections => LOCKED
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  lost           Report      @relation("LostSide", fields: [lostReportId], references: [id])
+  found          Report      @relation("FoundSide", fields: [foundReportId], references: [id])
+  claims         Claim[]
+
+  @@unique([lostReportId, foundReportId])
+  @@index([foundReportId, status])
+}

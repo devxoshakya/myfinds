@@ -88,6 +88,8 @@ ADMIN_EMAIL=             # seed creates this admin
 NEXT_PUBLIC_APP_URL=
 ```
 
+Supabase note: `DATABASE_URL` (pooled, port 6543) is the runtime connection via the `pg` driver adapter; `DIRECT_URL` (non-pooler) is what `prisma.config.ts` uses for CLI commands (`db push`, `migrate`). The Supabase pooler presents a self-signed certificate chain, so the runtime adapter passes `ssl: { rejectUnauthorized: false }` until the Supabase root CA is pinned (see `packages/db/src/index.ts`).
+
 ## 5. Data model
 
 Better Auth owns `user`, `session`, `account`, `verification`. Generate them with the Better Auth CLI, then keep the extensions below.

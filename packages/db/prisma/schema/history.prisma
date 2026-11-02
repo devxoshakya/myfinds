@@ -1,0 +1,19 @@
+// Append-only audit trail (BR-27). UPDATE and DELETE raise an exception via
+// the status_history_append_only trigger in prisma/sql/extensions.sql.
+// Every status change and every staff/admin action writes one row here.
+
+model StatusHistory {
+  id         String        @id @default(cuid())
+  reportId   String
+  fromStatus ReportStatus?
+  toStatus   ReportStatus?
+  actorId    String?       // null = system (cron/rules)
+  actorRole  String        // USER | STATION_STAFF | ADMIN | SYSTEM
+  action     String        // e.g. CREATED, RECEIPT_CONFIRMED, CLAIM_APPROVED
+  note       String?
+  createdAt  DateTime      @default(now())
+  report     Report @relation(fields: [reportId], references: [id])
+  actor      User?  @relation(fields: [actorId], references: [id])
+
+  @@index([reportId, createdAt])
+}

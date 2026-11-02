@@ -8,7 +8,10 @@ export default defineConfig({
   migrations: {
     path: path.join("prisma", "migrations"),
   },
+  // CLI (db push / migrate) uses the DIRECT (non-pooled) connection.
+  // The runtime client uses DATABASE_URL (pooled) via the pg driver adapter
+  // in src/index.ts — see docs/ARCHITECTURE.md §4.
   datasource: {
-    url: env("DATABASE_URL"),
+    url: env("DIRECT_URL"),
   },
 });

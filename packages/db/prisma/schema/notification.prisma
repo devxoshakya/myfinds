@@ -1,0 +1,15 @@
+// Delivery log for notifications (BR-14 acceptance / PRD §9).
+// Channel is EMAIL only in this MVP (cred-only auth, no SMS). Send failures
+// never block the triggering request; the daily cron retries FAILED rows once.
+
+model Notification {
+  id                String         @id @default(cuid())
+  userId            String
+  channel           Channel
+  template          String
+  providerMessageId String?
+  status            DeliveryStatus @default(QUEUED)
+  error             String?
+  createdAt         DateTime       @default(now())
+  user              User           @relation(fields: [userId], references: [id])
+}

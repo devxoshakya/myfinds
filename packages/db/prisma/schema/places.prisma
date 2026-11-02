@@ -1,0 +1,35 @@
+// Admin-managed place hierarchy (BR-01): State -> City -> Station.
+// No free-text locations anywhere in the app (explicit constraint).
+
+model State {
+  id     String @id @default(cuid())
+  name   String @unique
+  cities City[]
+}
+
+model City {
+  id       String    @id @default(cuid())
+  stateId  String
+  name     String
+  state    State     @relation(fields: [stateId], references: [id])
+  stations Station[]
+
+  @@unique([stateId, name])
+}
+
+model Station {
+  id           String         @id @default(cuid())
+  cityId       String
+  placeType    PlaceType
+  name         String
+  counterHours String?
+  addressNote  String?
+  active       Boolean        @default(true)
+  city         City           @relation(fields: [cityId], references: [id])
+  staff        StationStaff[]
+  reportsAt    Report[]       @relation("PlaceStation")
+  reportsHeld  Report[]       @relation("CustodyStation")
+
+  @@unique([cityId, placeType, name])
+  @@index([cityId, placeType])
+}

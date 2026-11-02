@@ -1,0 +1,74 @@
+// Enums referenced across the multi-file schema (docs/model.md §2).
+
+enum PlaceType {
+  METRO
+  RAILWAY
+  BUS_STOP
+}
+
+enum ReportType {
+  LOST
+  FOUND
+}
+
+enum Custodian {
+  FINDER
+  STATION
+}
+
+enum Category {
+  PHONE
+  WALLET
+  KEYS
+  BAG
+  ID_CARD
+  LAPTOP
+  HEADPHONES
+  CLOTHING
+  OTHER
+}
+
+enum ReportStatus {
+  SUBMITTED
+  SUBMITTED_TO_STOP
+  RECEIVED_BY_STOP
+  MATCHING
+  MATCH_FOUND
+  CLAIMED
+  VERIFIED
+  RETURNED
+  EXPIRED
+  WITHDRAWN
+}
+
+enum MatchStatus {
+  SUGGESTED
+  CLAIMED
+  REJECTED
+  LOCKED
+  DISMISSED
+  VERIFIED
+  COMPLETED
+}
+
+enum ClaimDecision {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PhotoKind {
+  ITEM
+  PROOF
+  CLAIM_PROOF
+}
+
+enum Channel {
+  EMAIL
+}
+
+enum DeliveryStatus {
+  QUEUED
+  SENT
+  FAILED
+}
