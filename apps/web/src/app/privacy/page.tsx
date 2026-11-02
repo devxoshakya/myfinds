@@ -15,11 +15,11 @@ export default function PrivacyPage() {
     >
       <DocSection title="Contact details">
         <p>
-          A report uses the verified phone number and email on your account. No personal contact
+          A report uses the verified email on your account. No personal contact
           detail is shown to another user before a claim is approved.
         </p>
         <p>
-          With finder custody, the owner and finder each see the other's first name and phone after
+          With finder custody, the owner and finder each see the other's first name and email after
           approval. With station custody, nobody sees personal contact details.
         </p>
       </DocSection>

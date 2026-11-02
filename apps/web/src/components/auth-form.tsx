@@ -41,7 +41,7 @@ const copy = {
   },
   signup: {
     title: "Create your account",
-    description: "Verify your email and phone before you report an item.",
+    description: "Verify your email before you report an item.",
     submit: "Create account",
     pending: "Creating account…",
     switchText: "Already have an account?",

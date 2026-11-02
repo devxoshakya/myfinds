@@ -711,7 +711,7 @@ export default function ReportForm({ kind }: ReportFormProps) {
                 description="Your contact information is never shown publicly."
               >
                 <div className="grid gap-3">
-                  {["Verified phone", "Verified email"].map((contact) => (
+                  {["Verified email"].map((contact) => (
                     <div
                       key={contact}
                       className="flex flex-col gap-2 border border-border bg-surface-muted p-3 sm:flex-row sm:items-center sm:justify-between"
