@@ -28,18 +28,7 @@ import {
 import Link from "next/link";
 import { useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { z } from "zod";
-
-const categories = [
-  "Phone",
-  "Wallet",
-  "Keys",
-  "Bag",
-  "ID card",
-  "Laptop",
-  "Headphones",
-  "Clothing",
-  "Other",
-] as const;
+import { reportDetailsSchema } from "@myfinds/shared";
 
 const placeTypes = [
   { value: "METRO", label: "Metro" },
@@ -196,16 +185,7 @@ const placeSchema = z
     }
   });
 
-const commonSchema = z.object({
-  itemName: z
-    .string()
-    .trim()
-    .min(1, "Enter an item name.")
-    .max(80, "Use 80 characters or fewer."),
-  category: z.enum(categories, { error: "Choose a category." }),
-  description: z.string().max(1000, "Use 1,000 characters or fewer."),
-  color: z.string().max(80, "Use 80 characters or fewer."),
-  brand: z.string().max(80, "Use 80 characters or fewer."),
+const commonSchema = reportDetailsSchema.extend({
   date: z
     .string()
     .min(1, "Choose a date.")
@@ -882,7 +862,6 @@ export default function ReportForm({ kind }: ReportFormProps) {
                       <Input
                         id="itemName"
                         className={inputClassName}
-                        maxLength={80}
                         placeholder="Black leather wallet"
                         value={values.itemName}
                         aria-required="true"
@@ -898,22 +877,16 @@ export default function ReportForm({ kind }: ReportFormProps) {
                     required
                     error={errors.category}
                   >
-                    <select
+                    <Input
                       id="category"
-                      className={selectClassName}
+                      className={inputClassName}
+                      placeholder="e.g. Wallet"
                       value={values.category}
                       aria-required="true"
                       aria-invalid={Boolean(errors.category)}
                       aria-describedby={errors.category ? "category-error" : undefined}
                       onChange={(event) => updateValue("category", event.target.value)}
-                    >
-                      <option value="">Choose a category</option>
-                      {categories.map((category) => (
-                        <option key={category} value={category}>
-                          {category}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </FormField>
                   <div className="sm:col-span-2">
                     <FormField
@@ -930,7 +903,6 @@ export default function ReportForm({ kind }: ReportFormProps) {
                       <Textarea
                         id="description"
                         className="min-h-24 resize-y rounded-sm bg-background px-3 py-2 text-sm"
-                        maxLength={1000}
                         value={values.description}
                         aria-invalid={Boolean(errors.description)}
                         aria-describedby={
@@ -944,7 +916,7 @@ export default function ReportForm({ kind }: ReportFormProps) {
                     <Input
                       id="color"
                       className={inputClassName}
-                      maxLength={80}
+                      placeholder="e.g. Black"
                       value={values.color}
                       aria-invalid={Boolean(errors.color)}
                       aria-describedby={errors.color ? "color-error" : undefined}
@@ -955,7 +927,6 @@ export default function ReportForm({ kind }: ReportFormProps) {
                     <Input
                       id="brand"
                       className={inputClassName}
-                      maxLength={80}
                       value={values.brand}
                       aria-invalid={Boolean(errors.brand)}
                       aria-describedby={errors.brand ? "brand-error" : undefined}
