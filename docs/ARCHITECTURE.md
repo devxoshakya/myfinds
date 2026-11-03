@@ -5,7 +5,7 @@
 
 ## 1. Overview
 
-One Next.js app (UI plus API route handlers) in a Turborepo, deployed on Vercel. PostgreSQL via Prisma. Photos in Cloudflare R2 through presigned URLs. Redis for counters and rate limits. SendGrid for email, Twilio for SMS. Vercel Cron for scheduled jobs. No AI in the MVP.
+One Next.js app (UI plus API route handlers) in a Turborepo, deployed on Vercel. PostgreSQL via Prisma. Photos in Cloudflare R2 through presigned URLs. Redis for counters and rate limits. SendGrid for email. Vercel Cron for scheduled jobs. No AI in the MVP. Authentication is email+password only — no social login, no phone OTP.
 
 ```
 Browser (Next.js PWA)
@@ -14,8 +14,8 @@ Browser (Next.js PWA)
 apps/web (Vercel serverless)
    |-- Prisma --------> PostgreSQL (pooled URL; direct URL for migrations)
    |-- S3 SDK --------> Cloudflare R2 (private bucket; browser uploads directly via presigned PUT)
-   |-- Redis ---------> rate limits, OTP/answer/code attempt counters, short locks
-   |-- SendGrid/Twilio -> email / SMS
+   |-- Redis ---------> answer/code attempt counters, rate limits, short locks
+   |-- SendGrid ------> email
 Vercel Cron -> /api/cron/* (secret header) -> expiry, reminders, rematch, photo cleanup
 ```
 
@@ -26,11 +26,11 @@ Vercel Cron -> /api/cron/* (secret header) -> expiry, reminders, rematch, photo 
 | Runtime | Node 22 LTS, TypeScript (strict) | pnpm workspaces |
 | Monorepo | Turborepo | See section 3 |
 | Web | Next.js (App Router), React, Tailwind CSS, shadcn/ui | Pin versions in lockfile |
-| Auth | Better Auth | Email+password, Google, phone-number OTP, role field |
+| Auth | Better Auth | Email+password only (credential login), email verification, role field |
 | DB | PostgreSQL + Prisma | Raw SQL for search and matching; extensions `pg_trgm` |
 | Storage | Cloudflare R2 via `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` | Private bucket |
 | Cache/limits | Redis (Upstash, HTTP client) | Better Auth `secondaryStorage` can share it |
-| Email / SMS | SendGrid / Twilio | SMS only for OTP and handover codes |
+| Email | SendGrid | Transactional email only (verification, match/claim events, handover code) |
 | Validation | Zod | Shared client and server schemas |
 | Forms | React Hook Form + `@hookform/resolvers/zod` | |
 | Data fetching | TanStack Query for client reads; server components for first load | |
@@ -57,7 +57,7 @@ myfinds/
           api/...                           # Route handlers (section 7)
         server/
           services/                         # All business logic (reports, matching, claims, handover, notifications, photos)
-          db.ts, redis.ts, r2.ts, mail.ts, sms.ts, auth.ts
+          db.ts, redis.ts, r2.ts, mail.ts, auth.ts
         components/                         # App-specific components
         lib/                                # client helpers
       public/ (manifest, icons)
@@ -79,20 +79,20 @@ DATABASE_URL=            # pooled connection
 DIRECT_URL=              # direct connection, migrations only
 BETTER_AUTH_SECRET=
 BETTER_AUTH_URL=
-GOOGLE_CLIENT_ID= / GOOGLE_CLIENT_SECRET=
 R2_ACCOUNT_ID= / R2_ACCESS_KEY_ID= / R2_SECRET_ACCESS_KEY= / R2_BUCKET= 
 REDIS_URL= / REDIS_TOKEN=
 SENDGRID_API_KEY= / EMAIL_FROM=
-TWILIO_ACCOUNT_SID= / TWILIO_AUTH_TOKEN= / TWILIO_FROM= (or TWILIO_MESSAGING_SERVICE_SID=)
 HANDOVER_CODE_KEY=       # 32 bytes base64, AES-256-GCM
 CRON_SECRET=             # Vercel sends it as Authorization: Bearer
 ADMIN_EMAIL=             # seed creates this admin
 NEXT_PUBLIC_APP_URL=
 ```
 
+Supabase note: `DATABASE_URL` (pooled, port 6543) is the runtime connection via the `pg` driver adapter; `DIRECT_URL` (non-pooler) is what `prisma.config.ts` uses for CLI commands (`db push`, `migrate`). The Supabase pooler presents a self-signed certificate chain, so the runtime adapter passes `ssl: { rejectUnauthorized: false }` until the Supabase root CA is pinned (see `packages/db/src/index.ts`).
+
 ## 5. Data model
 
-Better Auth owns `user`, `session`, `account`, `verification`. Generate them with the Better Auth CLI, then keep the extensions below. Phone fields follow the phone-number plugin's names (verify against the installed version).
+Better Auth owns `user`, `session`, `account`, `verification`. Generate them with the Better Auth CLI, then keep the extensions below.
 
 ```prisma
 generator client {
@@ -125,7 +125,7 @@ enum ReportStatus {
 enum MatchStatus { SUGGESTED CLAIMED REJECTED LOCKED DISMISSED VERIFIED COMPLETED }
 enum ClaimDecision { PENDING APPROVED REJECTED }
 enum PhotoKind { ITEM PROOF CLAIM_PROOF }
-enum Channel { EMAIL SMS }
+enum Channel { EMAIL }
 enum DeliveryStatus { QUEUED SENT FAILED }
 
 model User {
@@ -137,8 +137,6 @@ model User {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   role                Role     @default(USER)
-  phoneNumber         String?  @unique
-  phoneNumberVerified Boolean  @default(false)
 
   reports       Report[]
   claims        Claim[]
@@ -351,9 +349,9 @@ If Prisma's `Unsupported` column causes migration drift, keep the column only in
 
 ## 6. Auth and permissions
 
-**Better Auth setup (intent).** Prisma adapter; email+password with email verification; Google provider; phone-number plugin with OTP sent through Twilio; `user.additionalFields.role` (default `USER`, `input: false` so clients cannot set it); the Next.js cookie plugin; Redis as secondary storage for sessions and rate limits. Session helper `requireUser()` returns `{ id, role, emailVerified, phoneNumberVerified, stationIds[] }` (stationIds loaded from `StationStaff`).
+**Better Auth setup (intent).** Prisma adapter; email+password with email verification; `user.additionalFields.role` (default `USER`, `input: false` so clients cannot set it); the Next.js cookie plugin; Redis as secondary storage for sessions and rate limits. Session helper `requireUser()` returns `{ id, role, emailVerified, stationIds[] }` (stationIds loaded from `StationStaff`).
 
-**Verified gate.** `requireVerifiedUser()` = `requireUser()` plus both verifications true, else 403 `NOT_VERIFIED`. Used by every mutating report or claim route (BR-14).
+**Verified gate.** `requireVerifiedUser()` = `requireUser()` plus email verification true, else 403 `NOT_VERIFIED`. Used by every mutating report or claim route (BR-14).
 
 **`can(user, action, ctx)`** in `packages/shared/src/permissions.ts` is the only place permissions are decided. `ctx` carries the relevant report, match, claim, and station ids. Actions and rules:
 
@@ -404,7 +402,7 @@ Codes: `UNAUTHENTICATED` 401, `NOT_VERIFIED` 403, `FORBIDDEN` 403, `NOT_FOUND` 4
 | `POST /api/matches/:id/dismiss` | owner | none | Match |
 | `POST /api/matches/:id/claim` | owner | `{ answers[], claimPhotoKeys[], confirm: true }` | Claim; 423 if locked |
 | `POST /api/claims/:id/decision` | custodian | `{ decision: "APPROVED" \| "REJECTED", note? }` | Claim (+ code metadata if approved) |
-| `POST /api/claims/:id/reissue-code` | owner, custodian | none | `{ expiresAt }` (code sent by SMS and email) |
+| `POST /api/claims/:id/reissue-code` | owner, custodian | none | `{ expiresAt }` (code sent by email) |
 | `POST /api/claims/:id/handover` | custodian | `{ code, idType? }` | Both reports `RETURNED` |
 | `GET /api/station/items?tab=awaiting\|held\|claims` | staff | none | Items for own stations |
 | `POST /api/matches/:id/unlock` | staff of station, admin | `{ note }` | Match back to `SUGGESTED`, attempts reset |
@@ -413,7 +411,7 @@ Codes: `UNAUTHENTICATED` 401, `NOT_VERIFIED` 403, `FORBIDDEN` 403, `NOT_FOUND` 4
 | `GET /api/stats/public` | public | none | `{ reported, returned, stations }` (cached 5 min) |
 | `GET /api/cron/{expire,remind,rematch,cleanup}` | cron secret | none | `{ processed }` |
 
-Rate limits (Redis): OTP resend 3 per 10 min per user; claim submit 10 per hour per user; handover code attempts 5 per hour per claim; uploads sign 60 per hour per user; auth endpoints per Better Auth defaults.
+Rate limits (Redis): claim submit 10 per hour per user; handover code attempts 5 per hour per claim; uploads sign 60 per hour per user; auth endpoints per Better Auth defaults.
 
 ## 8. Core flows
 
@@ -435,7 +433,7 @@ All status writes go through one `transition(report, to, actor, action, note)` f
 
 - Generate with `crypto.randomInt(0, 1_000_000)`, zero-padded to 6 digits.
 - Store `handoverCodeEnc` = AES-256-GCM(`HANDOVER_CODE_KEY`, code) with random IV; format `iv.tag.ciphertext` base64. Encryption (not a one-way hash) because the owner's Report Status page must show the code again. A 6-digit code is too small to protect with hashing anyway; protection comes from expiry, encryption at rest, and the attempt limit.
-- Show the code only to the claimant (and only while `VERIFIED` and unexpired). Never log it. Send by SMS and email once on issue and on reissue.
+- Show the code only to the claimant (and only while `VERIFIED` and unexpired). Never log it. Send by email once on issue and on reissue.
 - Verify with `crypto.timingSafeEqual`. Reissue replaces `handoverCodeEnc` and `handoverExpiresAt` and resets the Redis attempt counter.
 
 ## 10. Matching
@@ -494,7 +492,7 @@ Golden tests: fixtures under `packages/shared/test/match-fixtures.ts` with expec
 
 ## 12. Notifications and jobs
 
-**Messaging.** `server/services/notify.ts` exposes `notify(event, payload)`. Each event maps to templates (React Email or plain HTML for SendGrid; short text for Twilio). Each send writes a `Notification` row. SMS templates exist only for OTP and handover code. If sending to Indian numbers, Twilio needs sender and template registration (DLT) before delivery works; start that early.
+**Messaging.** `server/services/notify.ts` exposes `notify(event, payload)`. Each event maps to templates (React Email or plain HTML for SendGrid). Each send writes a `Notification` row. No SMS is sent anywhere in the MVP; the handover code reaches the owner by email only.
 
 **Cron** (`vercel.json`, all `GET`, all check `Authorization: Bearer $CRON_SECRET`, all idempotent):
 
@@ -509,12 +507,12 @@ Check the hosting plan's cron limits; if daily frequency is the maximum, this ta
 
 ## 13. Security and privacy checklist
 
-1. **One serializer.** `toViewerReport(report, viewer)` is the only way reports leave the server. It strips `expectedAnswer`, `PROOF` photos, `handoverCodeEnc`, other users' email and phone, `walkInNote` (for non-staff), and internal fields unless `can()` allows them. Unit test that each role sees exactly the allowed fields.
+1. **One serializer.** `toViewerReport(report, viewer)` is the only way reports leave the server. It strips `expectedAnswer`, `PROOF` photos, `handoverCodeEnc`, other users' email and first name, `walkInNote` (for non-staff), and internal fields unless `can()` allows them. Unit test that each role sees exactly the allowed fields.
 2. **Contact release** happens in one function `getCounterpartContact(claim, viewer)` that returns data only for an `APPROVED` claim with finder custody (BR-23).
 3. Server-side Zod validation on every input; never trust client-sent role, status, or custody fields.
 4. Role is not client-settable. Only admin routes change `role` or `StationStaff`.
 5. Every staff and admin mutation writes `StatusHistory` with actor and note.
-6. Claim attempts, OTP tries, and code tries are counted server-side (DB for claim attempts, Redis for rate counters).
+6. Claim attempts and code tries are counted server-side (DB for claim attempts, Redis for rate counters).
 7. Cron routes reject requests without the secret.
 8. Secrets only in env vars. No PII or codes in logs.
 9. Security headers via `next.config` (CSP restricting script origins, `frame-ancestors 'none'`, `Referrer-Policy`).
@@ -543,14 +541,14 @@ Each milestone ends with passing tests and a deployable app. Do them in order; m
 | --- | --- | --- |
 | M0 | Turborepo, Next.js, Tailwind, shadcn, Prisma, CI, Vercel project, `.env.example` | App deploys; `pnpm build`, lint, and tests run in CI |
 | M1 | Schema and migrations (section 5), seed, `packages/shared` (enums, config, `can()`, status machine) | Seed runs; permission and transition tests pass |
-| M2 | Better Auth: email, Google, phone OTP, roles, verified gate, login/signup/verify screens | A user can sign up, verify both, and sees role-aware nav |
+| M2 | Better Auth: email+password cred login only, roles, email-verified gate, login/signup/verify-email screens | A user can sign up, verify email, and sees role-aware nav |
 | M3 (parallel) | Places API, place picker component, admin places screens | Picker works end to end; admin can add a station |
 | M4 (parallel) | Photo pipeline: sign, upload, confirm, signed read, uploader component | Upload and view a photo; limits and visibility enforced |
 | M5 | Report forms (lost, found, staff drop-off), create-report service, My Reports, Report Status (basic) | F-04, F-05 acceptance pass; history rows written |
 | M6 | Matching service and SQL, rematch job, Potential Match screen | Golden tests pass; owner sees ranked matches |
 | M7 | Claim, decision, lock, code issue, handover, reissue | F-10, F-11 acceptance pass; e2e flows 1 and 3 pass |
 | M8 | Station staff dashboard (receive, held items, claims), custody reassign, admin tools | F-07, F-13 pass; e2e flow 2 passes |
-| M9 | Notifications (SendGrid, Twilio, templates), cron jobs, rate limits | F-14, F-15 pass; every event in PRD section 9 sends |
+| M9 | Notifications (SendGrid, templates), cron jobs, rate limits | F-14, F-15 pass; every event in PRD section 9 sends |
 | M10 | Landing page, public stats, PWA, accessibility and polish pass | F-16, F-17 pass; Lighthouse and axe checks clean |
 
 ## 18. Later: AI service (not in MVP)

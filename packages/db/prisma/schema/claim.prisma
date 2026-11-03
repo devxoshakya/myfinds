@@ -1,0 +1,31 @@
+// Owner's proof attempt on a match (BR-15..BR-21).
+// Attempt cycle: PENDING -> APPROVED | REJECTED; server-generated attemptNo,
+// counted in DB (never client-side) — MAX_CLAIM_ATTEMPTS = 3 (BR-17).
+
+model Claim {
+  id                String        @id @default(cuid())
+  matchId           String
+  claimantId        String
+  attemptNo         Int
+  answers           Json // [{ questionId | null, text }]
+  decision          ClaimDecision @default(PENDING)
+  decidedById       String?
+  decidedAt         DateTime?
+  decisionNote      String?
+
+  // Handover (S1/S2): handoverCodeEnc = AES-256-GCM(iv.tag.ciphertext) of the
+  // 6-digit code; plaintext is never stored or logged. Owner or custodian can
+  // reissue, which replaces both fields and resets the Redis attempt counter.
+  handoverCodeEnc   String?
+  handoverExpiresAt DateTime? // issue + HANDOVER_CODE_TTL_HOURS (48)
+  handedOverById    String?
+  handedOverAt      DateTime?
+  handoverIdType    String? // ID type only, never the number (BR-21)
+
+  createdAt DateTime @default(now())
+  match     Match   @relation(fields: [matchId], references: [id])
+  claimant  User    @relation(fields: [claimantId], references: [id])
+  photos    Photo[]
+
+  @@unique([matchId, attemptNo])
+}

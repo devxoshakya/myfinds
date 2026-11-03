@@ -1,0 +1,14 @@
+// Staff scope: which stations a STATION_STAFF user may act on.
+// Only admin adds staff; a staff member can belong to several stations (PRD §11).
+
+model StationStaff {
+  userId    String
+  stationId String
+  addedById String
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+  user      User    @relation(fields: [userId], references: [id])
+  station   Station @relation(fields: [stationId], references: [id])
+
+  @@id([userId, stationId])
+}

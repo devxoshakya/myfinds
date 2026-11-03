@@ -18,6 +18,16 @@ export function createAuth(
       provider: "postgresql",
     }),
     trustedOrigins: [env.CORS_ORIGIN, ...desktopOrigins],
+    user: {
+      additionalFields: {
+        role: {
+          type: "string",
+          defaultValue: "USER",
+          // never settable from the client
+          input: false,
+        },
+      },
+    },
     emailAndPassword: { enabled: true },
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,

@@ -79,18 +79,18 @@ The role on a report comes from the report, not the account: the creator of a lo
   - `CLAIM_PROOF`: the claimant, the custodian, staff of the custody station, admin.
 
 ### Verification
-- **BR-14** Creating a report or a claim requires a verified phone **and** a verified email.
+- **BR-14** Creating a report or a claim requires a verified email.
 - **BR-15** A claim can only be made on a `SUGGESTED` match that belongs to the claimant's own lost report.
 - **BR-16** A found report has 1 to 2 verification questions with expected answers. They are **required** when custodian is `FINDER` and **optional** when `STATION` (staff can add or edit them). If a found report has no questions, the claim form asks for one required free-text field: "Describe something only the owner would know".
 - **BR-17** Each claim submission is one attempt. After `MAX_CLAIM_ATTEMPTS` (3) rejected attempts on the same match, the match becomes `LOCKED`. Only station staff of the custody station (or admin) can unlock it, or decide it manually. For finder custody, only admin can unlock.
 - **BR-18** The custodian approves or rejects. The system shows an answer-similarity hint but never decides alone.
-- **BR-19** On approval the system issues a 6-digit handover code that expires after `HANDOVER_CODE_TTL_HOURS` (48). It is sent by SMS and email to the owner and shown on the owner's Report Status page. The owner or custodian can **reissue** a code, which invalidates the old one.
+- **BR-19** On approval the system issues a 6-digit handover code that expires after `HANDOVER_CODE_TTL_HOURS` (48). It is sent by email to the owner and shown on the owner's Report Status page. The owner or custodian can **reissue** a code, which invalidates the old one.
 - **BR-20** At handover the custodian enters the code. Valid code means both reports become `RETURNED`, the match becomes `COMPLETED`, and all other `SUGGESTED` matches on that found report become `DISMISSED`. Max 5 code attempts per claim per hour.
 - **BR-21** For custodian `STATION`, staff check a government ID in person and record the ID **type** (never the number) when confirming handover (DEFAULT: required for station handover).
 
 ### Contact and privacy
 - **BR-22** No personal contact detail is shown to another user before approval.
-- **BR-23** After approval, with finder custody, owner and finder each see the other's first name and phone (DEFAULT: direct contact). With station custody nobody sees personal contact; the owner sees the station name, counter hours, and the handover code.
+- **BR-23** After approval, with finder custody, owner and finder each see the other's first name and email (DEFAULT: direct contact). With station custody nobody sees personal contact; the owner sees the station name, counter hours, and the handover code.
 - **BR-24** Finders are warned not to photograph or type card numbers, ID numbers, or screens with personal data. Staff and admin can remove any photo.
 
 ### Lifecycle and audit
@@ -129,8 +129,8 @@ Several owners may have `SUGGESTED` matches on one found report. Pending claims 
 **P0** = the core loop (report, match, verify, return) or custody breaks without it. **P1** = needed for a safe launch, built after the loop works. IDs are build order.
 
 ### F-01 Signup, login, and verification (P0)
-- Email plus password and Google login. A new account must verify email (link or code) and phone (SMS code) before creating reports or claims.
-- Acceptance: unverified user sees a "Verify to continue" screen on `/report/*` and gets 403 from the API; verified user proceeds; OTP resend limited to 3 per 10 minutes.
+- Email plus password (credential login only — no social login). A new account must verify email (link or code) before creating reports or claims.
+- Acceptance: unverified user sees a "Verify to continue" screen on `/report/*` and gets 403 from the API; verified user proceeds.
 
 ### F-02 Roles and permission check (P0)
 - One function `can(user, action, ctx)` in `packages/shared` decides every permission. Routes never inline role checks.
@@ -189,7 +189,7 @@ Several owners may have `SUGGESTED` matches on one found report. Pending claims 
 - Acceptance: each override requires a note and writes `StatusHistory`.
 
 ### F-14 Notifications (P1)
-- Email through SendGrid, SMS through Twilio. Events and recipients are in section 9.
+- Email through SendGrid. Events and recipients are in section 9.
 - Acceptance: each event creates a `Notification` row with channel, status, and provider id; failures are retried by the daily job and never block the request.
 
 ### F-15 Expiry and station reminders (P1)
@@ -217,26 +217,25 @@ All live in `packages/shared/src/config.ts` and can be overridden by env vars.
 | `STATION_RECEIPT_ALERT_DAYS` | 3 | BR-06 |
 | `MAX_ITEM_PHOTOS` / `MAX_CLAIM_PHOTOS` | 4 / 2 | BR-12 |
 | `MAX_PHOTO_MB` | 5 | BR-12 |
-| `OTP_RESEND_LIMIT` | 3 per 10 min | F-01 |
 
 ## 9. Notifications
 
 | Event | Recipient | Channel |
 | --- | --- | --- |
-| Phone or email verification | The user | SMS (phone), email (email) |
+| Email verification | The user | Email |
 | Found item submitted to a stop | Staff of that station | Email |
 | Receipt reminder (daily after 3 days) | Staff of that station | Email |
 | Match found | Owner of the lost report | Email |
 | Claim submitted | Custodian (finder, or staff of the station) | Email |
-| Claim approved | Owner | Email and SMS (with the code) |
-| Claim approved (finder custody) | Finder | Email (with the owner's first name and phone) |
+| Claim approved | Owner | Email (with the code) |
+| Claim approved (finder custody) | Finder | Email (with the owner's first name and email) |
 | Claim rejected | Owner | Email |
 | Match locked | Owner, custodian, admin | Email |
-| Code reissued | Owner | Email and SMS |
+| Code reissued | Owner | Email (with the new code) |
 | Returned | Owner and finder | Email |
 | Report expires in 7 days | Reporter | Email |
 
-SMS is used **only** for OTP and handover codes, to control cost.
+Email only — no SMS in the MVP, to control cost.
 
 ## 10. Out of scope for the MVP
 
@@ -250,7 +249,7 @@ AI or image matching, map view, public browse or "Explore Finds" page, native ap
 | When custody moves to a stop | Immediately on submit; flagged to admin if unconfirmed after 3 days |
 | Walk-in finders with no account | Allowed through staff counter drop-off with `walkInNote` |
 | Staff and stations | A staff member can belong to several stations; only admin adds staff |
-| Finder-custody contact | Direct (first name and phone) after approval |
+| Finder-custody contact | Direct (first name and email) after approval |
 | Valuables | Advisory only, not enforced |
 | Station handover | ID check by staff; record type, never number |
 | Report lifetime | 60 days; unclaimed items after expiry follow station policy (not modeled) |

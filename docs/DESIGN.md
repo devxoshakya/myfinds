@@ -145,7 +145,7 @@ Order, top to bottom:
   1. **What did you lose?** Item name\* (placeholder "Black leather wallet"), Category\* (select: Phone, Wallet, Keys, Bag, ID card, Laptop, Headphones, Clothing, Other), Description (textarea, helper "Marks, stickers, what was inside"), Color and Brand side by side (optional).
   2. **Where and when?** Place picker labelled "Where did you lose it?", Date lost\* (default today, future dates blocked), optional "Approximate time".
   3. **Photos (optional)** Photo uploader. Helper "A photo of a similar item, or an older photo of yours, helps."
-  4. **Your contact** Two read-only rows (verified phone, verified email, masked) each with a "verified" lock tag, and the note with a lock icon "Shared only after your claim is approved."
+  4. **Your contact** One read-only row (verified email, masked) with a "verified" lock tag, and the note with a lock icon "Shared only after your claim is approved."
 - Sidebar card "Tips for better matches" with a lightbulb: 01 Be specific about color and brand; 02 Choose the station where you think you lost it; 03 Add a photo if you can. (Drop the wireframe claims "cross-references reported items across transit authority hubs" and "speed up human validation by up to 80%".)
 - Sticky action bar: helper "We search for matches right away and email you." Cancel, "Submit report".
 - Wireframe bug to avoid: the sticky bar in the mockup overlaps the Where/When card. It must sit at the viewport bottom with page padding.

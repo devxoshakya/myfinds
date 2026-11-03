@@ -1,0 +1,14 @@
+// Ownership hidden detail (BR-16): 1-2 questions on found reports.
+// expectedAnswer is sensitive (S3): visible only to the custodian finder,
+// staff of the custody station, and admin — never to the owner/claimant.
+
+model VerificationQuestion {
+  id            String @id @default(cuid())
+  reportId      String
+  position      Int
+  question      String
+  expectedAnswer String // staff-entered or creator-entered; serializer-gated (S3)
+  report        Report @relation(fields: [reportId], references: [id])
+
+  @@unique([reportId, position])
+}
