@@ -14,6 +14,7 @@
   "dependencies": {
     "@myfinds/auth": "workspace:*",
     "@myfinds/db": "workspace:*",
+    "@myfinds/shared": "workspace:*",
     "better-auth": "catalog:",
     "cors": "^2.8.6",
     "express": "^5.2.1",

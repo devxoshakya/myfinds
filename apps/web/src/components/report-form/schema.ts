@@ -1,17 +1,6 @@
 import { placeDirectory } from "@/lib/preview-data";
+import { reportDetailsSchema } from "@myfinds/shared";
 import { z } from "zod";
-
-export const categories = [
-  "Phone",
-  "Wallet",
-  "Keys",
-  "Bag",
-  "ID card",
-  "Laptop",
-  "Headphones",
-  "Clothing",
-  "Other",
-] as const;
 
 export const placeTypes = [
   { value: "Metro", label: "Metro" },
@@ -105,16 +94,7 @@ export const placeSchema = z
     }
   });
 
-const commonSchema = z.object({
-  itemName: z
-    .string()
-    .trim()
-    .min(1, "Enter an item name.")
-    .max(80, "Use 80 characters or fewer."),
-  category: z.enum(categories, { error: "Choose a category." }),
-  description: z.string().max(1000, "Use 1,000 characters or fewer."),
-  color: z.string().max(80, "Use 80 characters or fewer."),
-  brand: z.string().max(80, "Use 80 characters or fewer."),
+const commonSchema = reportDetailsSchema.extend({
   date: z
     .string()
     .min(1, "Choose a date.")
