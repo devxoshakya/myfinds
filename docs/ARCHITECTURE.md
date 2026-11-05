@@ -5,18 +5,17 @@
 
 ## 1. Overview
 
-One Next.js app (UI plus API route handlers) in a Turborepo, deployed on Vercel. PostgreSQL via Prisma. Photos in Cloudflare R2 through presigned URLs. Redis for counters and rate limits. SendGrid for email. Vercel Cron for scheduled jobs. No AI in the MVP. Authentication is email+password only — no social login, no phone OTP.
+The Next.js app provides the UI and the existing Express app provides the API and Better Auth integration. Both live in the Turborepo; the API uses PostgreSQL via Prisma. Photos are planned for Cloudflare R2 through presigned URLs. Redis and SendGrid remain planned services. No AI in the MVP. Authentication is email+password only — no social login, no phone OTP.
 
 ```
 Browser (Next.js PWA)
-   |  HTTPS: route handlers + server actions (Better Auth session cookie)
+   |  HTTPS: Express API + Better Auth session cookie
    v
-apps/web (Vercel serverless)
-   |-- Prisma --------> PostgreSQL (pooled URL; direct URL for migrations)
-   |-- S3 SDK --------> Cloudflare R2 (private bucket; browser uploads directly via presigned PUT)
-   |-- Redis ---------> answer/code attempt counters, rate limits, short locks
-   |-- SendGrid ------> email
-Vercel Cron -> /api/cron/* (secret header) -> expiry, reminders, rematch, photo cleanup
+apps/server (Express, Bun)
+   |-- Prisma --------> PostgreSQL
+   |-- Redis ---------> planned distributed rate limits and attempt counters
+   |-- SendGrid ------> planned transactional email
+apps/web (Next.js) --> report and status UI
 ```
 
 ## 2. Stack
@@ -54,12 +53,12 @@ myfinds/
           (app)/reports/[id]/matches/page.tsx
           (app)/station/...                 # Staff dashboard
           (app)/admin/...                   # Admin
-          api/...                           # Route handlers (section 7)
-        server/
-          services/                         # All business logic (reports, matching, claims, handover, notifications, photos)
-          db.ts, redis.ts, r2.ts, mail.ts, auth.ts
         components/                         # App-specific components
         lib/                                # client helpers
+    server/
+      src/
+        routes/                             # Thin Express API handlers
+        services/                           # Business logic, including reports
       public/ (manifest, icons)
       sw.ts                                  # Serwist service worker
   packages/
@@ -70,7 +69,7 @@ myfinds/
   turbo.json  pnpm-workspace.yaml  vercel.json  .env.example
 ```
 
-**Rules.** Route handlers are thin: authenticate, validate with Zod, call a service, serialize. Business logic lives in `server/services`. Permission checks call `can()` from `packages/shared`. Serialization of any report or photo for a viewer goes through one `toViewerReport(report, viewer)` function (section 13).
+**Rules.** Express route handlers are thin: authenticate, validate with Zod, call a service, serialize. Business logic lives in `apps/server/src/services`. Permission checks call `can()` from `packages/shared`. Serialization of any report or photo for a viewer goes through one `toViewerReport(report, viewer)` function (section 13).
 
 ## 4. Environment variables (`.env.example`)
 
@@ -378,13 +377,13 @@ Tests: one test per action and role combination, including negative cases.
 
 ## 7. API contract
 
-All routes are under `apps/web/src/app/api`. JSON in and out. Validate with Zod schemas exported from `packages/shared`. Error body for every failure:
+Routes are mounted in the existing Express backend under `apps/server/src/routes`. JSON in and out. Keep route handlers thin, validate with Zod schemas exported from `packages/shared`, then call `apps/server/src/services`. Error body for every failure:
 
 ```json
 { "error": { "code": "VALIDATION_FAILED", "message": "Human readable", "fields": { "title": "Required" } } }
 ```
 
-Codes: `UNAUTHENTICATED` 401, `NOT_VERIFIED` 403, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_FAILED` 422, `CONFLICT` 409, `RATE_LIMITED` 429, `CLAIM_LOCKED` 423, `CODE_INVALID` 400, `CODE_EXPIRED` 410.
+Codes: `UNAUTHENTICATED` 401, `NOT_VERIFIED` 403, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_FAILED` 422, `CONFLICT` 409, `RATE_LIMITED` 429, `CLAIM_LOCKED` 423, `CODE_INVALID` 400, `CODE_EXPIRED` 410, `INTERNAL_ERROR` 500.
 
 | Method and path | Who | Request (summary) | Response (summary) |
 | --- | --- | --- | --- |
@@ -393,7 +392,8 @@ Codes: `UNAUTHENTICATED` 401, `NOT_VERIFIED` 403, `FORBIDDEN` 403, `NOT_FOUND` 4
 | `POST /api/uploads/sign` | verified | `{ kind, contentType, sizeBytes, reportId? , claimId? }` | `{ uploadUrl, r2Key, expiresAt }` |
 | `POST /api/uploads/confirm` | verified | `{ r2Key }` | Photo row (after server HEAD check) |
 | `GET /api/photos/:id/url` | per BR-13 | none | `{ url, expiresAt }` (5 min) |
-| `POST /api/reports` | verified, drop-off for staff | `CreateLostReport` or `CreateFoundReport` (includes place ids, custody choice, questions, photo keys) | `{ report, matchesCount }` |
+| `POST /api/reports` | verified | `CreateLostReport` or `CreateFoundReport` (includes place ids, custody choice, questions) | `{ report: { id, code: "MF-<number>", status }, statusToken }`; token is returned once and never stored raw |
+| `POST /api/reports/status` | private status token | `{ token }` in request body | Report number, category, current status, event date, and status-only timeline; no cache, private answers, or reporter data |
 | `GET /api/reports/mine` | user | `?status=&type=` | List of own reports (viewer-serialized) |
 | `GET /api/reports/:id` | per `report:read` | none | Report, timeline, next action, custodian panel data (only if allowed) |
 | `PATCH /api/reports/:id` | per `report:update` | Partial fields, or `{ withdraw: true }` | Updated report |
@@ -411,11 +411,13 @@ Codes: `UNAUTHENTICATED` 401, `NOT_VERIFIED` 403, `FORBIDDEN` 403, `NOT_FOUND` 4
 | `GET /api/stats/public` | public | none | `{ reported, returned, stations }` (cached 5 min) |
 | `GET /api/cron/{expire,remind,rematch,cleanup}` | cron secret | none | `{ processed }` |
 
-Rate limits (Redis): claim submit 10 per hour per user; handover code attempts 5 per hour per claim; uploads sign 60 per hour per user; auth endpoints per Better Auth defaults.
+Rate limits: report creation allows 10 requests per IP per hour and public report-status lookup allows 30 requests per IP per minute using in-process fixed-window counters. They key on the socket peer address, reset on restart, and are not shared across instances; behind a reverse proxy, requests may be grouped under the proxy IP. This is a basic single-instance safeguard, not a distributed abuse-control boundary. Replace them with a shared limiter and configure trusted proxy handling before horizontal scaling. Other planned limits: claim submit 10 per hour per user; handover code attempts 5 per hour per claim; uploads sign 60 per hour per user; auth endpoints per Better Auth defaults.
 
 ## 8. Core flows
 
 **Create report (`POST /api/reports`).** One Prisma transaction: insert report with `expiresAt = now + REPORT_TTL_DAYS`, insert photos (from confirmed keys), insert questions, insert `StatusHistory` (`CREATED`). Set initial status per PRD section 6. After commit: if matchable, run matching (section 10), set `MATCHING` or `MATCH_FOUND` with history rows, send notifications. Notification failures never fail the request.
+
+The W1-07 submission service currently persists the report, verification questions, and `CREATED` history row, returning the `MF-<number>` code and raw private status token once. It sets `SUBMITTED` for lost/finder-custody reports and `SUBMITTED_TO_STOP` for station custody. The private status endpoint hashes its body token, performs a constant-time hash comparison, and selects only report metadata and status history fields. Matching, notifications, and photo persistence are not part of this phase.
 
 **Receive (`POST /api/reports/:id/receive`).** Check `report:receive`; set `RECEIVED_BY_STOP`, `receivedById`, `receivedAt`, `storageRef`; clear `needsAttention`; history; run matching.
 

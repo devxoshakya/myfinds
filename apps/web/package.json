@@ -30,9 +30,11 @@
   "devDependencies": {
     "@myfinds/config": "workspace:*",
     "@tailwindcss/postcss": "catalog:",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^26.4.1",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "jsdom": "^31.0.0",
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vitest": "^5.1.0"

@@ -5,7 +5,7 @@ import { Label } from "@myfinds/ui/components/label";
 import { cn } from "@myfinds/ui/lib/utils";
 import { Search } from "lucide-react";
 
-import { placeDirectory } from "@/lib/preview-data";
+import type { PlaceDirectoryEntry } from "@/lib/report-api";
 
 import { FormField, RequiredMark } from "./fields";
 import {
@@ -20,37 +20,53 @@ type PlacePickerProps = {
   id: string;
   label: string;
   value: PlaceValue;
+  places: PlaceDirectoryEntry[];
+  disabled?: boolean;
   error?: string;
   onChange: (value: PlaceValue) => void;
 };
 
-export function PlacePicker({ id, label, value, error, onChange }: PlacePickerProps) {
-  const states = [...new Set(placeDirectory.map((place) => place.state))];
+export function PlacePicker({ id, label, value, places, disabled, error, onChange }: PlacePickerProps) {
+  const states = [...new Map(places.map((place) => [place.stateId, place.state])).entries()];
   const cities = [
-    ...new Set(
-      placeDirectory
-        .filter((place) => place.state === value.state)
-        .map((place) => place.city),
-    ),
+    ...new Map(
+      places
+        .filter((place) => place.stateId === value.stateId)
+        .map((place) => [place.cityId, place.city]),
+    ).entries(),
   ];
-  const stations = placeDirectory.filter(
+  const stations = places.filter(
     (place) =>
-      place.state === value.state &&
-      place.city === value.city &&
+      place.stateId === value.stateId &&
+      place.cityId === value.cityId &&
       place.placeType === value.placeType,
   );
 
   const update = (key: keyof PlaceValue, nextValue: string) => {
     if (key === "state") {
-      onChange({ ...emptyPlace(), state: nextValue });
+      const state = states.find(([stateId]) => stateId === nextValue);
+      onChange({ ...emptyPlace(), stateId: state?.[0] ?? "", state: state?.[1] ?? "" });
       return;
     }
     if (key === "city") {
-      onChange({ ...value, city: nextValue, placeType: "", station: "" });
+      const city = cities.find(([cityId]) => cityId === nextValue);
+      onChange({
+        ...value,
+        cityId: city?.[0] ?? "",
+        city: city?.[1] ?? "",
+        placeType: "",
+        stationId: "",
+        station: "",
+      });
       return;
     }
     if (key === "placeType") {
-      onChange({ ...value, placeType: nextValue, station: "" });
+      onChange({ ...value, placeType: nextValue, stationId: "", station: "" });
+      return;
+    }
+    if (key === "station") {
+      const station = stations.find((place) => place.station === nextValue);
+      onChange({ ...value, stationId: station?.stationId ?? "", station: nextValue });
       return;
     }
     onChange({ ...value, [key]: nextValue });
@@ -72,14 +88,15 @@ export function PlacePicker({ id, label, value, error, onChange }: PlacePickerPr
           <select
             id={`${id}-state`}
             className={selectClassName}
-            value={value.state}
+            value={value.stateId}
+            disabled={disabled || places.length === 0}
             aria-required="true"
             aria-invalid={Boolean(error) && !value.state}
             onChange={(event) => update("state", event.target.value)}
           >
             <option value="">Choose a state</option>
-            {states.map((state) => (
-              <option key={state} value={state}>
+            {states.map(([stateId, state]) => (
+              <option key={stateId} value={stateId}>
                 {state}
               </option>
             ))}
@@ -94,15 +111,15 @@ export function PlacePicker({ id, label, value, error, onChange }: PlacePickerPr
           <select
             id={`${id}-city`}
             className={selectClassName}
-            value={value.city}
-            disabled={!value.state}
+            value={value.cityId}
+            disabled={disabled || !value.stateId}
             aria-required="true"
             aria-invalid={Boolean(error) && !value.city}
             onChange={(event) => update("city", event.target.value)}
           >
             <option value="">Choose a city</option>
-            {cities.map((city) => (
-              <option key={city} value={city}>
+            {cities.map(([cityId, city]) => (
+              <option key={cityId} value={cityId}>
                 {city}
               </option>
             ))}
@@ -127,7 +144,7 @@ export function PlacePicker({ id, label, value, error, onChange }: PlacePickerPr
                 key={type.value}
                 type="button"
                 aria-pressed={selected}
-                disabled={!value.city}
+                disabled={disabled || !value.cityId}
                 onClick={() => update("placeType", type.value)}
                 className={cn(
                   "h-11 border text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-muted disabled:text-muted-foreground",
@@ -158,7 +175,7 @@ export function PlacePicker({ id, label, value, error, onChange }: PlacePickerPr
             className={`${inputClassName} pl-9`}
             list={`${id}-stations`}
             value={value.station}
-            disabled={!value.placeType}
+            disabled={disabled || !value.placeType}
             placeholder="Search station (e.g. Sample Central)"
             autoComplete="off"
             aria-required="true"
@@ -169,7 +186,7 @@ export function PlacePicker({ id, label, value, error, onChange }: PlacePickerPr
         </div>
         <datalist id={`${id}-stations`}>
           {stations.map((station) => (
-            <option key={station.station} value={station.station} />
+            <option key={station.stationId} value={station.station} />
           ))}
         </datalist>
         {value.placeType && stations.length === 0 ? (
@@ -190,6 +207,7 @@ export function PlacePicker({ id, label, value, error, onChange }: PlacePickerPr
           className={inputClassName}
           maxLength={120}
           value={value.note}
+          disabled={disabled}
           onChange={(event) => update("note", event.target.value)}
         />
       </FormField>

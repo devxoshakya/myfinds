@@ -91,7 +91,7 @@ export function PhotoUploader({
       </div>
 
       <p aria-live="polite" className="text-sm text-muted-foreground">
-        Attached: {files.length} of {max}. JPEG, PNG or WebP, up to 5 MB each.
+        Selected on this form: {files.length} of {max}. JPEG, PNG or WebP, up to 5 MB each.
       </p>
 
       {error ? (
@@ -124,8 +124,8 @@ export function PrivatePhotoUploader({
         Private proof photo <span className="font-normal text-muted-foreground">(optional)</span>
       </span>
       <p id={`${id}-description`} className="text-sm leading-5 text-muted-foreground">
-        A close-up of something only the owner would know, such as a serial number. It is never
-        shown to the person claiming the item.
+        A close-up of something only the owner would know, such as a serial number. This photo is
+        only previewed here and will not be saved yet.
       </p>
       <label
         htmlFor={id}
@@ -137,7 +137,7 @@ export function PrivatePhotoUploader({
             {file ? file.name : "Upload private verification proof"}
           </span>
           <span className="mt-0.5 block text-xs text-muted-foreground">
-            JPEG, PNG or WebP, up to 5 MB
+            Not saved yet. JPEG, PNG or WebP, up to 5 MB
           </span>
         </span>
         <input

@@ -57,6 +57,8 @@ User *—* Station via StationStaff (staff scope)
 `Report` — one row per lost or found item.
 
 - Identity: `id` (cuid), `number` (autoincrement, shown to users as `MF-<number>`), `type` (`LOST`/`FOUND`), `reporterId`.
+- Private status lookup: `statusTokenHash` (unique SHA-256 hash; nullable for reports created before token support). The raw token is returned only at creation and is never stored or logged.
+- Submission idempotency: `ReportIdempotency` stores a reporter-scoped key hash, keyed request fingerprint, linked report, and authenticated ciphertext for the status token so retries can return the original result without storing the bearer token in plaintext. It is committed in the same transaction as the report.
 - Item: `title`, `category` (`PHONE`/`WALLET`/`KEYS`/`BAG`/`ID_CARD`/`LAPTOP`/`HEADPHONES`/`CLOTHING`/`OTHER`), `description`, `color`, `brand`, `eventDate` (date), `eventTime` (optional `HH:mm`, informational only).
 - Place: `placeStationId` (required), `placeNote` (≤120 chars — platform/gate/coach, BR-01). Never a free-text place.
 - Lifecycle: `status` (see below), `needsAttention`, `expiresAt` (creation + `REPORT_TTL_DAYS` = 60, BR-25), `closedAt`.
@@ -129,6 +131,7 @@ Scoring: `0.30 place + 0.30 text + 0.20 date + 0.20 attributes`; keep ≥ `MATCH
 | S8 | R2 object keys / bucket URLs | env + `Photo.r2Key` | Raw keys never leave the server; all reads are 5-min presigned GETs after `can('photo:read')` |
 | S9 | Auth passwords / tokens | `account.password` (bcrypt), `session.token` | Owned entirely by Better Auth; httpOnly cookies |
 | S10 | SendGrid / R2 / DB / cron secrets | env vars only (varlock-managed in this repo) | No PII, codes, or secrets in logs; cron routes reject requests without `CRON_SECRET` |
+| S11 | Private report-status token | Raw token exists only at creation and in the successful response; `Report.statusTokenHash` stores its SHA-256 hash | Generate with a cryptographically secure random source; never log or persist the raw token. Anyone holding it can access the private status lookup. |
 
 Additional model-level enforcement:
 
