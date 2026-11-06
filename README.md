@@ -88,6 +88,22 @@ Bun's automatic env loading is disabled in `bunfig.toml`; the framework integrat
 
 Run standalone Node/Bun tools that use Varlock from the owning app directory so they load that app's schema and env files. `env:generate` only generates TypeScript files; it does not initialize environment values in a subsequent command.
 
+### Cloudflare R2 photos
+
+The server-side photo pipeline uses a private Cloudflare R2 bucket. Configure these variables in
+`apps/server/.env`:
+
+```text
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET_NAME=
+```
+
+Configure the bucket CORS policy to allow `PUT` from `CORS_ORIGIN` with the `Content-Type` and
+`Content-Length` request headers. Photos are uploaded through short-lived presigned URLs,
+validated with an object `HEAD`, and read through owner-checked five-minute presigned URLs.
+
 ## Deployment
 
 ### Docker Compose
