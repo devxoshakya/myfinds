@@ -18,7 +18,17 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { createReportSchema, reportCategories } from "@myfinds/shared";
+
+import {
+  copyReportCode,
+  getPlaces,
+  mapReportApiFields,
+  ReportApiError,
+  submitReport,
+  type PlaceDirectoryEntry,
+} from "@/lib/report-api";
 
 import { FormField, RequiredMark, SectionCard } from "./fields";
 import { PhotoUploader, PrivatePhotoUploader } from "./photo-uploader";
@@ -38,8 +48,6 @@ import {
 type ReportFormProps = {
   kind: "lost" | "found";
 };
-
-const valuableCategories = ["Phone", "Wallet", "ID card", "Laptop"];
 
 function initialValues(): FormValues {
   return {
@@ -65,7 +73,40 @@ export default function ReportForm({ kind }: ReportFormProps) {
   const [itemPhotos, setItemPhotos] = useState<File[]>([]);
   const [proofPhoto, setProofPhoto] = useState<File | null>(null);
   const [photoErrors, setPhotoErrors] = useState<Record<string, string>>({});
-  const [submitted, setSubmitted] = useState(false);
+  const [places, setPlaces] = useState<PlaceDirectoryEntry[]>([]);
+  const [placesLoading, setPlacesLoading] = useState(true);
+  const [placesError, setPlacesError] = useState("");
+  const [placesRetry, setPlacesRetry] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState("");
+  const [createdReport, setCreatedReport] = useState<Awaited<ReturnType<typeof submitReport>> | null>(
+    null,
+  );
+  const [copyFeedback, setCopyFeedback] = useState("");
+  const idempotencyKeyRef = useRef<{ payload: string; key: string } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setPlacesLoading(true);
+    setPlacesError("");
+    getPlaces()
+      .then((directory) => {
+        if (active) setPlaces(directory);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setPlacesError(
+            error instanceof Error ? error.message : "The place directory is unavailable.",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setPlacesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [placesRetry]);
 
   const clearError = (key: string) => {
     setErrors((current) => {
@@ -79,11 +120,11 @@ export default function ReportForm({ kind }: ReportFormProps) {
   const updateValue = <Key extends keyof FormValues>(key: Key, value: FormValues[Key]) => {
     setValues((current) => ({ ...current, [key]: value }));
     clearError(key);
+    setSubmissionError("");
     if (key === "custody") {
       clearError("questions");
       clearError("handInPlace");
     }
-    setSubmitted(false);
   };
 
   const updatePlace = (key: "place" | "handInPlace", place: FormValues["place"]) => {
@@ -94,14 +135,12 @@ export default function ReportForm({ kind }: ReportFormProps) {
     }));
     clearError(key);
     if (key === "place" && values.sameAsFound) clearError("handInPlace");
-    setSubmitted(false);
   };
 
   const handlePhotoChange = (
     event: ChangeEvent<HTMLInputElement>,
     photoKind: "itemPhotos" | "proofPhoto",
   ) => {
-    setSubmitted(false);
     const selected = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = "";
 
@@ -146,7 +185,6 @@ export default function ReportForm({ kind }: ReportFormProps) {
       delete next.itemPhotos;
       return next;
     });
-    setSubmitted(false);
   };
 
   const toggleSamePlace = (checked: boolean) => {
@@ -156,7 +194,6 @@ export default function ReportForm({ kind }: ReportFormProps) {
       handInPlace: checked ? { ...current.place } : emptyPlace(),
     }));
     clearError("handInPlace");
-    setSubmitted(false);
   };
 
   const updateQuestion = (index: number, key: keyof QuestionValue, value: string) => {
@@ -170,7 +207,6 @@ export default function ReportForm({ kind }: ReportFormProps) {
     });
     clearError("questions");
     clearError(`questions.${index}.${key}`);
-    setSubmitted(false);
   };
 
   const addQuestion = () => {
@@ -182,7 +218,6 @@ export default function ReportForm({ kind }: ReportFormProps) {
       return { ...current, questions: [...seed, { question: "", expectedAnswer: "" }] };
     });
     clearError("questions");
-    setSubmitted(false);
   };
 
   const removeQuestion = (index: number) => {
@@ -191,18 +226,16 @@ export default function ReportForm({ kind }: ReportFormProps) {
       questions: current.questions.filter((_, questionIndex) => questionIndex !== index),
     }));
     clearError("questions");
-    setSubmitted(false);
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (Object.keys(photoErrors).length > 0) {
-      setSubmitted(false);
       return;
     }
 
-    const payload = {
+    const formData = {
       itemName: values.itemName,
       category: values.category,
       description: values.description,
@@ -215,12 +248,12 @@ export default function ReportForm({ kind }: ReportFormProps) {
 
     const result = isFound
       ? foundSchema.safeParse({
-          ...payload,
+          ...formData,
           custody: values.custody,
           handInPlace: values.custody === "STATION" ? values.handInPlace : undefined,
           questions: values.questions,
         })
-      : lostSchema.safeParse(payload);
+      : lostSchema.safeParse(formData);
 
     if (!result.success) {
       const nextErrors: Record<string, string> = {};
@@ -228,14 +261,20 @@ export default function ReportForm({ kind }: ReportFormProps) {
 
       result.error.issues.forEach((issue) => {
         const first = issue.path.length > 0 ? String(issue.path[0]) : "form";
-        if (!nextErrors[first]) nextErrors[first] = issue.message;
+        const key =
+          first === "questions" &&
+          typeof issue.path[1] === "number" &&
+          typeof issue.path[2] === "string"
+            ? issue.path.join(".")
+            : first;
+        if (!nextErrors[key]) nextErrors[key] = issue.message;
         focusId ??= fieldIdForPath(
           issue.path.map((segment) => (typeof segment === "number" ? segment : String(segment))),
         );
       });
 
       setErrors(nextErrors);
-      setSubmitted(false);
+
 
       const idToFocus = focusId;
       if (idToFocus) {
@@ -248,15 +287,75 @@ export default function ReportForm({ kind }: ReportFormProps) {
       return;
     }
 
+    const reportPayload = {
+      type: isFound ? ("FOUND" as const) : ("LOST" as const),
+      title: values.itemName,
+      category: values.category,
+      description: values.description,
+      color: values.color,
+      brand: values.brand,
+      eventDate: values.date,
+      ...(values.time ? { eventTime: values.time } : {}),
+      placeStationId: values.place.stationId,
+      ...(values.place.note ? { placeNote: values.place.note } : {}),
+      ...(isFound
+        ? {
+            custodyChoice: values.custody,
+            ...(values.custody === "STATION"
+              ? { handInStationId: values.handInPlace.stationId }
+              : {}),
+            questions: values.questions,
+          }
+        : {}),
+    };
+
+    const apiValidation = createReportSchema.safeParse(reportPayload);
+    if (!apiValidation.success) {
+      const fieldErrors = Object.fromEntries(
+        apiValidation.error.issues.map((issue) => [issue.path.join(".") || "form", issue.message]),
+      );
+      setErrors(mapReportApiFields(fieldErrors));
+      setSubmissionError("Check the report details and try again.");
+      return;
+    }
+
     setErrors({});
     setPhotoErrors({});
-    setSubmitted(true);
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
+    setSubmissionError("");
+    setSubmitting(true);
+    const serializedPayload = JSON.stringify(apiValidation.data);
+    if (idempotencyKeyRef.current?.payload !== serializedPayload) {
+      idempotencyKeyRef.current = {
+        payload: serializedPayload,
+        key: window.crypto.randomUUID(),
+      };
+    }
+    try {
+      const created = await submitReport(apiValidation.data, idempotencyKeyRef.current.key);
+      setCreatedReport(created);
+      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+    } catch (error) {
+      if (error instanceof ReportApiError) {
+        const fieldErrors = mapReportApiFields(error.fields);
+        setErrors(fieldErrors);
+        setSubmissionError(
+          Object.keys(fieldErrors).length > 0
+            ? error.message
+            : `${error.message}${error.status === 401 ? " Please sign in and retry." : ""}`,
+        );
+      } else {
+        setSubmissionError(
+          error instanceof Error
+            ? error.message
+            : "The report could not be saved. Check your connection and retry.",
+        );
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const isValuable = isFound && valuableCategories.includes(values.category);
+  const isValuable = isFound && ["PHONE", "WALLET", "ID_CARD", "LAPTOP"].includes(values.category);
   const hasHandInPlace = isFound && values.custody === "STATION";
   const questionRows =
     values.questions.length > 0
@@ -276,8 +375,59 @@ export default function ReportForm({ kind }: ReportFormProps) {
 
   const errorCount = Object.keys(errors).length + Object.keys(photoErrors).length;
 
+  if (createdReport) {
+    const statusUrl = `/status/${encodeURIComponent(createdReport.statusToken)}`;
+    return (
+      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6">
+        <div
+          role="status"
+          aria-live="polite"
+          className="grid gap-5 border border-success/40 bg-success-bg p-6 text-success sm:p-8"
+        >
+          <div className="flex items-center gap-3">
+            <Check className="size-6 shrink-0" aria-hidden="true" />
+            <h1 className="text-2xl font-semibold">Your report was submitted</h1>
+          </div>
+          <p className="text-sm leading-6">
+            Keep your report number. Your photos were not saved; photo uploads are not available yet.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-mono text-lg font-semibold text-foreground" aria-label="Report number">
+              {createdReport.report.code}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 border-success text-success"
+              onClick={async () => {
+                try {
+                  await copyReportCode(createdReport.report.code);
+                  setCopyFeedback("Report number copied.");
+                } catch {
+                  setCopyFeedback("Could not copy. Select the report number to copy it.");
+                }
+              }}
+            >
+              Copy report number
+            </Button>
+          </div>
+          {copyFeedback ? <p role="status">{copyFeedback}</p> : null}
+          <div className="grid gap-2 border-t border-success/30 pt-4">
+            <h2 className="font-semibold">Private status link</h2>
+            <a href={statusUrl} className="break-all underline underline-offset-4">
+              {typeof window === "undefined" ? statusUrl : `${window.location.origin}${statusUrl}`}
+            </a>
+            <p className="text-sm leading-5">
+              This link contains your private access token. Keep it to yourself.
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <div className="mx-auto w-full max-w-[70rem] px-4 pt-6 pb-24 sm:px-6 sm:pt-8">
+    <div className="mx-auto w-full max-w-280 px-4 pt-6 pb-24 sm:px-6 sm:pt-8">
       <nav aria-label="Breadcrumb" className="mb-4 flex items-center gap-2 text-sm">
         <Link href="/" className="text-muted-foreground underline-offset-4 hover:underline">
           Home
@@ -299,22 +449,21 @@ export default function ReportForm({ kind }: ReportFormProps) {
 
       <div className="mt-5 flex items-start gap-3 border border-border bg-surface-muted px-4 py-3 text-sm leading-5">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        <p>
-          Preview build: answers are checked in your browser, but reports are not saved yet.
-        </p>
+        <p>Reports are saved to MyFinds. Photo uploads are preview-only and are not saved.</p>
       </div>
 
-      {submitted ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="mt-4 flex items-start gap-3 border border-success/40 bg-success-bg p-4 text-sm leading-5 text-success"
-        >
-          <Check className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <p>
-            <span className="font-semibold">Your report is ready.</span> Saving reports arrives with
-            the reports service. Your answers stay on this page.
-          </p>
+      {placesError ? (
+        <div role="alert" className="mt-4 flex items-center justify-between gap-3 border border-destructive/40 bg-danger-bg p-4 text-sm text-destructive">
+          <p>{placesError}</p>
+          <Button type="button" variant="outline" onClick={() => setPlacesRetry((value) => value + 1)}>
+            Retry loading places
+          </Button>
+        </div>
+      ) : null}
+
+      {submissionError ? (
+        <div role="alert" className="mt-4 border border-destructive/40 bg-danger-bg p-4 text-sm text-destructive">
+          {submissionError}
         </div>
       ) : null}
 
@@ -422,16 +571,26 @@ export default function ReportForm({ kind }: ReportFormProps) {
                 </FormField>
 
                 <FormField id="category" label="Category" required error={errors.category}>
-                  <Input
+                  <select
                     id="category"
-                    className={inputClassName}
-                    placeholder="e.g. Wallet"
+                    className={`${inputClassName} w-full border border-input bg-card`}
                     value={values.category}
                     aria-required="true"
                     aria-invalid={Boolean(errors.category)}
                     aria-describedby={errors.category ? "category-error" : undefined}
                     onChange={(event) => updateValue("category", event.target.value)}
-                  />
+                  >
+                    <option value="">Choose a category</option>
+                    {reportCategories.map((category) => (
+                      <option key={category} value={category}>
+                        {category
+                          .toLowerCase()
+                          .split("_")
+                          .map((word) => word[0]?.toUpperCase() + word.slice(1))
+                          .join(" ")}
+                      </option>
+                    ))}
+                  </select>
                 </FormField>
 
                 <FormField id="brand" label="Brand" optional error={errors.brand}>
@@ -490,6 +649,8 @@ export default function ReportForm({ kind }: ReportFormProps) {
                 id="place"
                 label={isFound ? "Where did you find it?" : "Where did you lose it?"}
                 value={values.place}
+                places={places}
+                disabled={placesLoading || Boolean(placesError)}
                 error={errors.place}
                 onChange={(place) => updatePlace("place", place)}
               />
@@ -551,7 +712,9 @@ export default function ReportForm({ kind }: ReportFormProps) {
                     id="handInPlace"
                     label="Station or stop where you handed it in"
                     value={values.handInPlace}
-                    error={errors.handInPlace}
+                        places={places}
+                        disabled={placesLoading || Boolean(placesError)}
+                        error={errors.handInPlace}
                     onChange={(place) => updatePlace("handInPlace", place)}
                   />
                 )}
@@ -564,8 +727,8 @@ export default function ReportForm({ kind }: ReportFormProps) {
                 label={isFound ? "Item photos" : "Add photos"}
                 description={
                   isFound
-                    ? "Shown only to the person whose claim matches. Hide sensitive labels or names."
-                    : "A photo of a similar item, or an older photo of yours, helps."
+                    ? "Photo uploads are not saved yet. Hide sensitive labels or names."
+                    : "Photo uploads are not saved yet."
                 }
                 files={itemPhotos}
                 max={4}
@@ -583,7 +746,6 @@ export default function ReportForm({ kind }: ReportFormProps) {
                     onChange={(event) => handlePhotoChange(event, "proofPhoto")}
                     onRemove={() => {
                       setProofPhoto(null);
-                      setSubmitted(false);
                     }}
                   />
                 </div>
@@ -610,13 +772,13 @@ export default function ReportForm({ kind }: ReportFormProps) {
                   >
                     <legend className="px-1 text-sm font-semibold">
                       Question {index + 1}
-                      {values.custody === "FINDER" ? <RequiredMark /> : null}
+                      {values.custody === "FINDER" && index === 0 ? <RequiredMark /> : null}
                     </legend>
 
                     <FormField
                       id={`question-${index}`}
                       label="Question"
-                      required={values.custody === "FINDER"}
+                      required={values.custody === "FINDER" && index === 0}
                       error={errors[`questions.${index}.question`]}
                     >
                       <Input
@@ -625,7 +787,7 @@ export default function ReportForm({ kind }: ReportFormProps) {
                         maxLength={300}
                         placeholder="What is the lock screen wallpaper?"
                         value={question.question}
-                        aria-required={values.custody === "FINDER"}
+                        aria-required={values.custody === "FINDER" && index === 0}
                         aria-invalid={Boolean(errors[`questions.${index}.question`])}
                         aria-describedby={
                           errors[`questions.${index}.question`]
@@ -639,7 +801,7 @@ export default function ReportForm({ kind }: ReportFormProps) {
                     <FormField
                       id={`expected-answer-${index}`}
                       label="Expected answer"
-                      required={values.custody === "FINDER"}
+                      required={values.custody === "FINDER" && index === 0}
                       description="Only you and station staff can see this. Never shown to people claiming it."
                       error={errors[`questions.${index}.expectedAnswer`]}
                     >
@@ -648,7 +810,7 @@ export default function ReportForm({ kind }: ReportFormProps) {
                         className={inputClassName}
                         maxLength={300}
                         value={question.expectedAnswer}
-                        aria-required={values.custody === "FINDER"}
+                        aria-required={values.custody === "FINDER" && index === 0}
                         aria-invalid={Boolean(errors[`questions.${index}.expectedAnswer`])}
                         aria-describedby={
                           errors[`questions.${index}.expectedAnswer`]
@@ -661,7 +823,8 @@ export default function ReportForm({ kind }: ReportFormProps) {
                       />
                     </FormField>
 
-                    {values.custody === "STATION" && questionRows.length > 1 ? (
+                    {values.custody === "STATION" ||
+                    (values.custody === "FINDER" && index > 0) ? (
                       <Button
                         type="button"
                         variant="link"
@@ -738,7 +901,7 @@ export default function ReportForm({ kind }: ReportFormProps) {
                   : [
                       "Be specific about color and brand.",
                       "Choose the station where you think you lost it.",
-                      "Add a photo if you can.",
+                      "Photo uploads are preview-only and are not saved yet.",
                     ]
               }
             />
@@ -753,7 +916,7 @@ export default function ReportForm({ kind }: ReportFormProps) {
               </div>
               <p className="mt-3 text-sm leading-5 text-muted-foreground">
                 {isFound
-                  ? "Item photos are shared only with a matched owner. Private proof is never shown to a claimant."
+                  ? "Selected photos are preview-only and are not saved or shared. Do not select sensitive images."
                   : "Only you, station staff, and the custodian of a matched found item can see your report."}
               </p>
             </div>
@@ -770,7 +933,7 @@ export default function ReportForm({ kind }: ReportFormProps) {
         </div>
 
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 shadow-[0_2px_12px_rgba(0,0,0,0.12)] backdrop-blur">
-          <div className="mx-auto flex w-full max-w-[70rem] flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="mx-auto flex w-full max-w-280 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Bolt className="size-4 shrink-0" aria-hidden="true" />
               {isFound
@@ -787,8 +950,12 @@ export default function ReportForm({ kind }: ReportFormProps) {
                 <ArrowLeft data-icon="inline-start" aria-hidden="true" />
                 Cancel
               </Button>
-              <Button type="submit" className="h-11 px-5 text-sm">
-                Submit report
+              <Button
+                type="submit"
+                className="h-11 px-5 text-sm"
+                disabled={submitting || placesLoading || Boolean(placesError)}
+              >
+                {submitting ? "Submitting…" : placesLoading ? "Loading places…" : "Submit report"}
               </Button>
             </div>
           </div>

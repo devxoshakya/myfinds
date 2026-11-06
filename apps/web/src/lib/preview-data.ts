@@ -1,3 +1,5 @@
+import { reportStatuses } from "@myfinds/shared";
+
 /**
  * Preview fixtures for the UI.
  *
@@ -9,17 +11,7 @@
 
 export type ReportType = "LOST" | "FOUND";
 
-export type ReportStatus =
-  | "SUBMITTED"
-  | "SUBMITTED_TO_STOP"
-  | "RECEIVED_BY_STOP"
-  | "MATCHING"
-  | "MATCH_FOUND"
-  | "CLAIMED"
-  | "VERIFIED"
-  | "RETURNED"
-  | "EXPIRED"
-  | "WITHDRAWN";
+export type ReportStatus = (typeof reportStatuses)[number];
 
 export type PlaceType = "Metro" | "Railway" | "Bus stop";
 

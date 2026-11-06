@@ -3,6 +3,9 @@ import cors from "cors";
 import express from "express";
 
 import { ENV } from "./env.server";
+import { placesRouter } from "./routes/places";
+import { createReportStatusRouter } from "./routes/report-status";
+import { reportsRouter } from "./routes/reports";
 import { auth } from "./services";
 
 const app = express();
@@ -19,6 +22,9 @@ app.use(
 app.all("/api/auth{/*path}", toNodeHandler(auth));
 
 app.use(express.json());
+app.use("/api/places", placesRouter);
+app.use("/api/reports/status", createReportStatusRouter());
+app.use("/api/reports", reportsRouter);
 
 app.get("/", (_req, res) => {
   res.status(200).send("OK");

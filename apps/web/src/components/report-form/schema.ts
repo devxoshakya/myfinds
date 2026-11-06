@@ -1,11 +1,14 @@
-import { placeDirectory } from "@/lib/preview-data";
-import { reportDetailsSchema } from "@myfinds/shared";
+import {
+  reportCategories,
+  reportDetailsSchema,
+  verificationQuestionSchema,
+} from "@myfinds/shared";
 import { z } from "zod";
 
 export const placeTypes = [
-  { value: "Metro", label: "Metro" },
-  { value: "Railway", label: "Railway" },
-  { value: "Bus stop", label: "Bus stop" },
+  { value: "METRO", label: "Metro" },
+  { value: "RAILWAY", label: "Railway" },
+  { value: "BUS_STOP", label: "Bus stop" },
 ] as const;
 
 export const custodyChoices = [
@@ -26,9 +29,12 @@ export const custodyChoices = [
 export type Custody = (typeof custodyChoices)[number]["value"];
 
 export type PlaceValue = {
+  stateId: string;
   state: string;
+  cityId: string;
   city: string;
   placeType: string;
+  stationId: string;
   station: string;
   note: string;
 };
@@ -54,9 +60,12 @@ export type FormValues = {
 };
 
 export const emptyPlace = (): PlaceValue => ({
+  stateId: "",
   state: "",
+  cityId: "",
   city: "",
   placeType: "",
+  stationId: "",
   station: "",
   note: "",
 });
@@ -69,32 +78,18 @@ export function currentDate() {
 
 export const placeSchema = z
   .object({
+    stateId: z.string().min(1, "Choose a state."),
     state: z.string().min(1, "Choose a state."),
+    cityId: z.string().min(1, "Choose a city."),
     city: z.string().min(1, "Choose a city."),
     placeType: z.string().min(1, "Choose a place type."),
+    stationId: z.string().min(1, "Choose a station from the list."),
     station: z.string().min(1, "Choose a station or stop."),
     note: z.string().max(120, "Use 120 characters or fewer."),
-  })
-  .superRefine((place, context) => {
-    if (
-      place.station &&
-      !placeDirectory.some(
-        (option) =>
-          option.state === place.state &&
-          option.city === place.city &&
-          option.placeType === place.placeType &&
-          option.station === place.station,
-      )
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["station"],
-        message: "Choose a station from the list.",
-      });
-    }
   });
 
 const commonSchema = reportDetailsSchema.extend({
+  category: z.enum(reportCategories),
   date: z
     .string()
     .min(1, "Choose a date.")
@@ -103,51 +98,33 @@ const commonSchema = reportDetailsSchema.extend({
   place: placeSchema,
 });
 
-const questionSchema = z.object({
-  question: z.string().max(300, "Use 300 characters or fewer."),
-  expectedAnswer: z.string().max(300, "Use 300 characters or fewer."),
-});
-
 export const lostSchema = commonSchema;
 
 export const foundSchema = commonSchema
   .extend({
-    custody: z.string().refine((value) => value === "FINDER" || value === "STATION", {
-      message: "Choose how you will return the item.",
-    }),
+    custody: z.enum(["FINDER", "STATION"]),
     handInPlace: placeSchema.optional(),
-    questions: z.array(questionSchema).max(2, "Add no more than two questions."),
+    questions: z.array(verificationQuestionSchema).max(2, "Add no more than two questions."),
   })
   .superRefine((values, context) => {
-    if (values.custody === "FINDER" && values.questions.length === 0) {
+    if (values.custody === "STATION" && !values.handInPlace) {
       context.addIssue({
         code: "custom",
-        path: ["questions"],
-        message: "Add at least one question only the owner can answer.",
+        path: ["handInPlace"],
+        message: "Choose where you handed in the item.",
       });
     }
 
-    values.questions.forEach((question, index) => {
-      if (!question.question.trim() && !question.expectedAnswer.trim()) {
-        return;
-      }
-
-      if (!question.question.trim()) {
-        context.addIssue({
-          code: "custom",
-          path: ["questions", index, "question"],
-          message: "Enter a verification question.",
-        });
-      }
-
-      if (!question.expectedAnswer.trim()) {
-        context.addIssue({
-          code: "custom",
-          path: ["questions", index, "expectedAnswer"],
-          message: "Enter the expected answer.",
-        });
-      }
-    });
+    if (
+      values.custody === "FINDER" &&
+      (!values.questions[0]?.question || !values.questions[0]?.expectedAnswer)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["questions", 0],
+        message: "Complete the first question and answer.",
+      });
+    }
   });
 
 export const inputClassName =

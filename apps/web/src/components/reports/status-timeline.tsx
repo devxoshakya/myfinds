@@ -2,6 +2,7 @@ import { cn } from "@myfinds/ui/lib/utils";
 import { Check } from "lucide-react";
 
 import type { PreviewReport, ReportStatus } from "@/lib/preview-data";
+import type { PrivateReportStatus } from "@/lib/report-api";
 
 type Step = {
   key: string;
@@ -9,6 +10,11 @@ type Step = {
   description: string;
   statuses: ReportStatus[];
 };
+
+const timelineDateFormatter = new Intl.DateTimeFormat("en", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 const baseSteps: Step[] = [
   {
@@ -77,20 +83,42 @@ const currentIndexByStatus: Record<ReportStatus, number> = {
   WITHDRAWN: 0,
 };
 
-export function StatusTimeline({ report }: { report: PreviewReport }) {
-  const isStationHeld = report.custodian === "STATION" && Boolean(report.custodyStation);
+type PreviewTimelineReport = Pick<
+  PreviewReport,
+  "status" | "custodian" | "custodyStation" | "history"
+>;
+
+export function StatusTimeline({
+  report,
+}: {
+  report: PreviewTimelineReport | PrivateReportStatus;
+}) {
+  const isPrivateStatus = "timeline" in report;
+  const isStationHeld = isPrivateStatus
+    ? report.timeline.some((entry) => entry.status === "SUBMITTED_TO_STOP")
+    : report.custodian === "STATION" && Boolean(report.custodyStation);
+  const timelineDates: Map<ReportStatus, string> = new Map(
+    isPrivateStatus ? report.timeline.map((entry) => [entry.status, entry.date] as const) : [],
+  );
   const steps = isStationHeld ? [...stationSteps, ...baseSteps] : baseSteps;
 
   const closed = report.status === "RETURNED";
+  const progressStatus =
+    isPrivateStatus && (report.status === "EXPIRED" || report.status === "WITHDRAWN")
+      ? [...report.timeline]
+          .reverse()
+          .find((entry) => entry.status !== "EXPIRED" && entry.status !== "WITHDRAWN")?.status ??
+        report.status
+      : report.status;
   const offset = isStationHeld ? 2 : 0;
   const stationIndex =
-    report.status === "SUBMITTED_TO_STOP"
+    progressStatus === "SUBMITTED_TO_STOP"
       ? 0
-      : report.status === "RECEIVED_BY_STOP"
+      : progressStatus === "RECEIVED_BY_STOP"
         ? 1
-        : currentIndexByStatus[report.status] + offset;
+        : currentIndexByStatus[progressStatus] + offset;
   const currentIndex = Math.min(
-    isStationHeld ? stationIndex : currentIndexByStatus[report.status],
+    isStationHeld ? stationIndex : currentIndexByStatus[progressStatus],
     steps.length - 1,
   );
 
@@ -104,6 +132,9 @@ export function StatusTimeline({ report }: { report: PreviewReport }) {
         {steps.map((step, index) => {
           const complete = closed || index < currentIndex;
           const current = !closed && index === currentIndex;
+          const date = step.statuses
+            .map((status) => timelineDates.get(status))
+            .find((value) => value !== undefined);
 
           return (
             <li
@@ -135,6 +166,14 @@ export function StatusTimeline({ report }: { report: PreviewReport }) {
                 {step.title}
               </p>
               <p className="mt-0.5 text-xs leading-4 text-muted-foreground">{step.description}</p>
+              {date ? (
+                <time
+                  className="mt-2 block text-[0.625rem] text-muted-foreground"
+                  dateTime={date}
+                >
+                  {timelineDateFormatter.format(new Date(date))}
+                </time>
+              ) : null}
               {current ? (
                 <span className="mt-2 inline-flex bg-primary px-1.5 py-0.5 font-mono text-[0.5625rem] tracking-[0.04em] text-primary-foreground uppercase">
                   Current
@@ -163,16 +202,18 @@ export function StatusTimeline({ report }: { report: PreviewReport }) {
             </span>
           );
         })}
-        <span
-          className={cn(
-            "border px-2 py-1 font-mono text-[0.625rem] tracking-[0.04em] uppercase",
-            report.history.some((entry) => entry.action.toLowerCase().includes("rejected"))
-              ? "border-foreground text-foreground"
-              : "border-border text-muted-foreground",
-          )}
-        >
-          Claim rejected
-        </span>
+        {!isPrivateStatus ? (
+          <span
+            className={cn(
+              "border px-2 py-1 font-mono text-[0.625rem] tracking-[0.04em] uppercase",
+              report.history.some((entry) => entry.action.toLowerCase().includes("rejected"))
+                ? "border-foreground text-foreground"
+                : "border-border text-muted-foreground",
+            )}
+          >
+            Claim rejected
+          </span>
+        ) : null}
       </div>
     </section>
   );

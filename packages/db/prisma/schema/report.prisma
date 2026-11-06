@@ -6,6 +6,7 @@
 model Report {
   id               String       @id @default(cuid())
   number           Int          @unique @default(autoincrement()) // shown as MF-<number>
+  statusTokenHash  String?      @unique // SHA-256 of a private status token; raw token is never stored
   type             ReportType
   reporterId       String
   title            String
@@ -41,8 +42,24 @@ model Report {
   lostMatches    Match[]                @relation("LostSide")
   foundMatches   Match[]                @relation("FoundSide")
   history        StatusHistory[]
+  idempotency    ReportIdempotency?
 
   @@index([type, category, status, expiresAt])
   @@index([reporterId])
   @@index([custodyStationId, status])
+}
+
+model ReportIdempotency {
+  id                    String   @id @default(cuid())
+  reporterId            String
+  keyHash               String
+  requestHash           String
+  reportId              String   @unique
+  encryptedStatusToken  String
+  createdAt             DateTime @default(now())
+  reporter              User     @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  report                Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reporterId, keyHash])
+  @@index([reporterId, createdAt])
 }
