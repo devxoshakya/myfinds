@@ -1,30 +1,8 @@
 import { createPrismaClient } from "../src";
 import { ENV } from "../src/env";
+import { DELHI_NCR_TRANSPORT_PLACES } from "@myfinds/shared";
 
 const db = createPrismaClient(ENV);
-
-const stations: readonly (readonly ["METRO" | "RAILWAY" | "BUS_STOP", string])[] = [
-  ["METRO", "Rajiv Chowk Metro"],
-  ["METRO", "Central Secretariat Metro"],
-  ["METRO", "Kashmere Gate Metro"],
-  ["METRO", "Hauz Khas Metro"],
-  ["METRO", "Dwarka Sector 21 Metro"],
-  ["METRO", "New Delhi Metro"],
-  ["METRO", "Chandni Chowk Metro"],
-  ["METRO", "Saket Metro"],
-  ["METRO", "Noida Sector 18 Metro"],
-  ["METRO", "Karol Bagh Metro"],
-  ["RAILWAY", "New Delhi Railway Station"],
-  ["RAILWAY", "Old Delhi Railway Station"],
-  ["RAILWAY", "Hazrat Nizamuddin Railway Station"],
-  ["RAILWAY", "Anand Vihar Terminal"],
-  ["RAILWAY", "Delhi Cantt Railway Station"],
-  ["RAILWAY", "Sabzi Mandi Railway Station"],
-  ["BUS_STOP", "Kashmere Gate ISBT"],
-  ["BUS_STOP", "Anand Vihar ISBT"],
-  ["BUS_STOP", "Sarai Kale Khan ISBT"],
-  ["BUS_STOP", "Mori Gate Bus Stop"],
-] as const;
 
 const items: readonly (readonly ["PHONE" | "WALLET" | "KEYS" | "BAG" | "ID_CARD" | "LAPTOP" | "HEADPHONES" | "CLOTHING" | "OTHER", string, string, string | null])[] = [
   ["PHONE", "black Android phone", "black", "Samsung"],
@@ -54,28 +32,33 @@ function dateFor(index: number) {
 }
 
 async function main() {
-  const state = await db.state.upsert({
-    where: { name: "Delhi" },
-    update: {},
-    create: { name: "Delhi" },
-  });
-  const city = await db.city.upsert({
-    where: { stateId_name: { stateId: state.id, name: "New Delhi" } },
-    update: {},
-    create: { stateId: state.id, name: "New Delhi" },
-  });
-
   const stationRecords = [];
-  for (const [placeType, name] of stations) {
+  for (const place of DELHI_NCR_TRANSPORT_PLACES) {
+    const state = await db.state.upsert({
+      where: { name: place.state },
+      update: {},
+      create: { name: place.state },
+    });
+    const city = await db.city.upsert({
+      where: { stateId_name: { stateId: state.id, name: place.city } },
+      update: {},
+      create: { stateId: state.id, name: place.city },
+    });
     stationRecords.push(
       await db.station.upsert({
-        where: { cityId_placeType_name: { cityId: city.id, placeType, name } },
+        where: {
+          cityId_placeType_name: {
+            cityId: city.id,
+            placeType: place.placeType,
+            name: place.name,
+          },
+        },
         update: { active: true },
         create: {
           cityId: city.id,
-          placeType,
-          name,
-          counterHours: placeType === "RAILWAY" ? "06:00-22:00" : "06:00-23:00",
+          placeType: place.placeType,
+          name: place.name,
+          counterHours: place.placeType === "RAILWAY" ? "06:00-22:00" : "06:00-23:00",
           addressNote: "Delhi demonstration directory",
         },
       }),

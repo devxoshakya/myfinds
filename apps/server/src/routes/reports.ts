@@ -13,6 +13,7 @@ import {
   InvalidReportStationError,
   ReportIdempotencyConflictError,
 } from "../services/reports";
+import { refreshMatchesForReport } from "../services/matching";
 
 type ReportSession = {
   user: Pick<Session["user"], "id" | "role" | "emailVerified">;
@@ -40,6 +41,100 @@ export function createReportsRouter({
     if (!session) {
       response.status(401).json({
         error: { code: "UNAUTHENTICATED", message: "Sign in to view your reports." },
+      });
+
+      router.get("/:id/matches", async (request, response) => {
+        response.setHeader("Cache-Control", "private, no-store, max-age=0");
+        const session = await getSession(request.headers);
+        if (!session) {
+          response.status(401).json({
+            error: { code: "UNAUTHENTICATED", message: "Sign in to view report matches." },
+          });
+          return;
+        }
+
+        try {
+          const report = await database.report.findFirst({
+            where: { id: request.params.id, reporterId: session.user.id },
+            select: {
+              id: true,
+              type: true,
+              lostMatches: {
+                where: { status: "SUGGESTED" },
+                orderBy: { score: "desc" },
+                take: 5,
+                select: {
+                  id: true,
+                  score: true,
+                  scoreBreakdown: true,
+                  found: {
+                    select: {
+                      id: true,
+                      title: true,
+                      category: true,
+                      eventDate: true,
+                      placeStation: { select: { name: true, city: { select: { name: true } } } },
+                    },
+                  },
+                },
+              },
+              foundMatches: {
+                where: { status: "SUGGESTED" },
+                orderBy: { score: "desc" },
+                take: 5,
+                select: {
+                  id: true,
+                  score: true,
+                  scoreBreakdown: true,
+                  lost: {
+                    select: {
+                      id: true,
+                      title: true,
+                      category: true,
+                      eventDate: true,
+                      placeStation: { select: { name: true, city: { select: { name: true } } } },
+                    },
+                  },
+                },
+              },
+            },
+          });
+          if (!report) {
+            response.status(404).json({
+              error: { code: "NOT_FOUND", message: "Report matches were not found." },
+            });
+            return;
+          }
+
+          const matches = report.type === "LOST" ? report.lostMatches : report.foundMatches;
+          response.json({
+            matches: matches.map((match) => {
+              const candidate = "found" in match ? match.found : match.lost;
+              return {
+                id: match.id,
+                score: match.score,
+                scoreBreakdown: match.scoreBreakdown,
+                candidate: {
+                  id: candidate.id,
+                  title: candidate.title,
+                  category: candidate.category,
+                  eventDate: candidate.eventDate.toISOString().slice(0, 10),
+                  place: {
+                    station: candidate.placeStation.name,
+                    city: candidate.placeStation.city.name,
+                  },
+                },
+              };
+            }),
+          });
+        } catch (error) {
+          console.error("Report matches request failed", {
+            errorName: error instanceof Error ? error.name : "unknown",
+          });
+          response.status(500).json({
+            error: { code: "INTERNAL_ERROR", message: "Report matches are unavailable." },
+          });
+        }
       });
       return;
     }
@@ -167,6 +262,14 @@ export function createReportsRouter({
         parsed.data,
         idempotency,
       );
+      try {
+        await refreshMatchesForReport(database, created.reportId);
+      } catch (error) {
+        console.error("Report matching failed after report creation", {
+          reportId: created.reportId,
+          errorName: error instanceof Error ? error.name : "unknown",
+        });
+      }
       response.status(201).json({
         report: {
           id: created.reportId,

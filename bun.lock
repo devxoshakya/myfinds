@@ -90,6 +90,7 @@
     "packages/db": {
       "name": "@myfinds/db",
       "dependencies": {
+        "@myfinds/shared": "workspace:*",
         "@prisma/adapter-pg": "^7.10.1",
         "@prisma/client": "^7.10.0",
         "zod": "catalog:",
