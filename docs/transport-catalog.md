@@ -1,6 +1,6 @@
 # Delhi NCR transport catalog
 
-The checked-in baseline is maintained in
+The checked-in baseline contains 315 DMRC/NCR metro entries and is maintained in
 [`packages/shared/src/transport-catalog.ts`](../packages/shared/src/transport-catalog.ts).
 It covers the selected DMRC, Indian Railways, DTC, and ISBT places without a
 runtime dependency on an external transport API.

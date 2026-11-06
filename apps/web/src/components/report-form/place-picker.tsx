@@ -1,10 +1,16 @@
 "use client";
 
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@myfinds/ui/components/combobox";
 import { Input } from "@myfinds/ui/components/input";
 import { Label } from "@myfinds/ui/components/label";
-import { Select } from "@myfinds/ui/components/select";
 import { cn } from "@myfinds/ui/lib/utils";
-import { Search } from "lucide-react";
 
 import type { PlaceDirectoryEntry } from "@/lib/report-api";
 
@@ -13,7 +19,6 @@ import {
   emptyPlace,
   inputClassName,
   placeTypes,
-  selectClassName,
   type PlaceValue,
 } from "./schema";
 
@@ -27,15 +32,74 @@ type PlacePickerProps = {
   onChange: (value: PlaceValue) => void;
 };
 
+type SearchOption = { id: string; label: string };
+
+function SearchableSelect({
+  id,
+  value,
+  options,
+  placeholder,
+  disabled,
+  invalid,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  options: SearchOption[];
+  placeholder: string;
+  disabled?: boolean;
+  invalid?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const selected = options.find((option) => option.id === value) ?? null;
+
+  return (
+    <Combobox
+      items={options}
+      value={selected}
+      onValueChange={(option) => onChange(option?.id ?? "")}
+      onInputValueChange={(inputValue) => {
+        const option = options.find(
+          (candidate) =>
+            candidate.id === inputValue ||
+            candidate.label.toLowerCase() === inputValue.toLowerCase(),
+        );
+        if (option) onChange(option.id);
+      }}
+      itemToStringValue={(option) => option?.label ?? ""}
+      disabled={disabled}
+    >
+      <ComboboxInput
+        id={id}
+        placeholder={placeholder}
+        aria-required="true"
+        aria-invalid={invalid}
+        autoComplete="off"
+      />
+      <ComboboxContent>
+        <ComboboxEmpty>No matching places.</ComboboxEmpty>
+        <ComboboxList>
+          {(option) => (
+            <ComboboxItem key={option.id} value={option}>
+              {option.label}
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
+  );
+}
+
 export function PlacePicker({ id, label, value, places, disabled, error, onChange }: PlacePickerProps) {
-  const states = [...new Map(places.map((place) => [place.stateId, place.state])).entries()];
-  const cities = [
+  const states: SearchOption[] = [...new Map(places.map((place) => [place.stateId, place.state])).entries()]
+    .map(([id, label]) => ({ id, label }));
+  const cities: SearchOption[] = [
     ...new Map(
       places
         .filter((place) => place.stateId === value.stateId)
         .map((place) => [place.cityId, place.city]),
     ).entries(),
-  ];
+  ].map(([id, label]) => ({ id, label }));
   const stations = places.filter(
     (place) =>
       place.stateId === value.stateId &&
@@ -45,16 +109,16 @@ export function PlacePicker({ id, label, value, places, disabled, error, onChang
 
   const update = (key: keyof PlaceValue, nextValue: string) => {
     if (key === "state") {
-      const state = states.find(([stateId]) => stateId === nextValue);
-      onChange({ ...emptyPlace(), stateId: state?.[0] ?? "", state: state?.[1] ?? "" });
+      const state = states.find((option) => option.id === nextValue);
+      onChange({ ...emptyPlace(), stateId: state?.id ?? "", state: state?.label ?? "" });
       return;
     }
     if (key === "city") {
-      const city = cities.find(([cityId]) => cityId === nextValue);
+      const city = cities.find((option) => option.id === nextValue);
       onChange({
         ...value,
-        cityId: city?.[0] ?? "",
-        city: city?.[1] ?? "",
+        cityId: city?.id ?? "",
+        city: city?.label ?? "",
         placeType: "",
         stationId: "",
         station: "",
@@ -66,8 +130,12 @@ export function PlacePicker({ id, label, value, places, disabled, error, onChang
       return;
     }
     if (key === "station") {
-      const station = stations.find((place) => place.station === nextValue);
-      onChange({ ...value, stationId: station?.stationId ?? "", station: nextValue });
+      const station = stations.find((place) => place.stationId === nextValue);
+      onChange({
+        ...value,
+        stationId: station?.stationId ?? "",
+        station: station?.station ?? "",
+      });
       return;
     }
     onChange({ ...value, [key]: nextValue });
@@ -86,22 +154,15 @@ export function PlacePicker({ id, label, value, places, disabled, error, onChang
             State
             <RequiredMark />
           </Label>
-          <Select
+          <SearchableSelect
             id={`${id}-state`}
-            className={selectClassName.replace("appearance-none pr-9", "")}
             value={value.stateId}
+            options={states}
+            placeholder="Search states"
             disabled={disabled || places.length === 0}
-            aria-required="true"
-            aria-invalid={Boolean(error) && !value.state}
-            onChange={(event) => update("state", event.target.value)}
-          >
-            <option value="">Choose a state</option>
-            {states.map(([stateId, state]) => (
-              <option key={stateId} value={stateId}>
-                {state}
-              </option>
-            ))}
-          </Select>
+            invalid={Boolean(error) && !value.state}
+            onChange={(nextValue) => update("state", nextValue)}
+          />
         </div>
 
         <div className="grid gap-2">
@@ -109,22 +170,15 @@ export function PlacePicker({ id, label, value, places, disabled, error, onChang
             City
             <RequiredMark />
           </Label>
-          <Select
+          <SearchableSelect
             id={`${id}-city`}
-            className={selectClassName.replace("appearance-none pr-9", "")}
             value={value.cityId}
+            options={cities}
+            placeholder="Search cities"
             disabled={disabled || !value.stateId}
-            aria-required="true"
-            aria-invalid={Boolean(error) && !value.city}
-            onChange={(event) => update("city", event.target.value)}
-          >
-            <option value="">Choose a city</option>
-            {cities.map(([cityId, city]) => (
-              <option key={cityId} value={cityId}>
-                {city}
-              </option>
-            ))}
-          </Select>
+            invalid={Boolean(error) && !value.city}
+            onChange={(nextValue) => update("city", nextValue)}
+          />
         </div>
       </div>
 
@@ -166,30 +220,15 @@ export function PlacePicker({ id, label, value, places, disabled, error, onChang
           Station or stop
           <RequiredMark />
         </Label>
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            id={`${id}-station`}
-            className={`${inputClassName} pl-9`}
-            list={`${id}-stations`}
-            value={value.station}
-            disabled={disabled || !value.placeType}
-            placeholder="Search station (e.g. Sample Central)"
-            autoComplete="off"
-            aria-required="true"
-            aria-invalid={Boolean(error)}
-            aria-describedby={error ? `${id}-error` : undefined}
-            onChange={(event) => update("station", event.target.value)}
-          />
-        </div>
-        <datalist id={`${id}-stations`}>
-          {stations.map((station) => (
-            <option key={station.stationId} value={station.station} />
-          ))}
-        </datalist>
+        <SearchableSelect
+          id={`${id}-station`}
+          value={value.stationId}
+          options={stations.map((station) => ({ id: station.stationId, label: station.station }))}
+          placeholder="Search station or stop"
+          disabled={disabled || !value.placeType}
+          invalid={Boolean(error)}
+          onChange={(nextValue) => update("station", nextValue)}
+        />
         {value.placeType && stations.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No stations for this place type yet.

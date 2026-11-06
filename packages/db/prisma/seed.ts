@@ -32,38 +32,45 @@ function dateFor(index: number) {
 }
 
 async function main() {
-  const stationRecords = [];
-  for (const place of DELHI_NCR_TRANSPORT_PLACES) {
-    const state = await db.state.upsert({
-      where: { name: place.state },
-      update: {},
-      create: { name: place.state },
-    });
-    const city = await db.city.upsert({
-      where: { stateId_name: { stateId: state.id, name: place.city } },
-      update: {},
-      create: { stateId: state.id, name: place.city },
-    });
-    stationRecords.push(
-      await db.station.upsert({
-        where: {
-          cityId_placeType_name: {
-            cityId: city.id,
-            placeType: place.placeType,
-            name: place.name,
-          },
-        },
-        update: { active: true },
-        create: {
-          cityId: city.id,
-          placeType: place.placeType,
-          name: place.name,
-          counterHours: place.placeType === "RAILWAY" ? "06:00-22:00" : "06:00-23:00",
-          addressNote: "Delhi demonstration directory",
-        },
-      }),
-    );
-  }
+  const stateNames = [...new Set(DELHI_NCR_TRANSPORT_PLACES.map((place) => place.state))];
+  await db.state.createMany({
+    data: stateNames.map((name) => ({ name })),
+    skipDuplicates: true,
+  });
+  const states = await db.state.findMany({ where: { name: { in: stateNames } } });
+  const stateIds = new Map(states.map((state) => [state.name, state.id]));
+  const cityKeys = [
+    ...new Map(
+      DELHI_NCR_TRANSPORT_PLACES.map((place) => [
+        `${place.state}:${place.city}`,
+        { stateId: stateIds.get(place.state)!, name: place.city },
+      ]),
+    ).values(),
+  ];
+  await db.city.createMany({ data: cityKeys, skipDuplicates: true });
+  const cities = await db.city.findMany({
+    where: { OR: cityKeys.map((city) => ({ stateId: city.stateId, name: city.name })) },
+  });
+  const cityIds = new Map(cities.map((city) => [`${city.stateId}:${city.name}`, city.id]));
+  await db.station.createMany({
+    data: DELHI_NCR_TRANSPORT_PLACES.map((place) => ({
+      cityId: cityIds.get(`${stateIds.get(place.state)}:${place.city}`)!,
+      placeType: place.placeType,
+      name: place.name,
+      counterHours: place.placeType === "RAILWAY" ? "06:00-22:00" : "06:00-23:00",
+      addressNote: "Delhi demonstration directory",
+    })),
+    skipDuplicates: true,
+  });
+  const stationRecords = await db.station.findMany({
+    where: {
+      OR: DELHI_NCR_TRANSPORT_PLACES.map((place) => ({
+        cityId: cityIds.get(`${stateIds.get(place.state)}:${place.city}`)!,
+        placeType: place.placeType,
+        name: place.name,
+      })),
+    },
+  });
 
   const users = [];
   for (const [id, name, email] of reportUsers) {

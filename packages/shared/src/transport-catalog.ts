@@ -13,6 +13,13 @@ export type TransportPlace = {
 // station directories when the directory is reviewed; runtime matching never
 // scrapes external sites.
 export const DELHI_NCR_TRANSPORT_PLACES: readonly TransportPlace[] = [
+  ...DMRC_METRO_STATIONS.map((name) => ({
+    source: "DMRC" as const,
+    placeType: "METRO" as const,
+    state: name.includes("Noida") || name.includes("Greater Noida") ? "Uttar Pradesh" : "Delhi",
+    city: name.includes("Noida") || name.includes("Greater Noida") ? "Noida" : "New Delhi",
+    name: name.endsWith("Metro") ? name : `${name} Metro`,
+  })),
   { source: "DMRC", placeType: "METRO", state: "Delhi", city: "New Delhi", name: "Rajiv Chowk Metro" },
   { source: "DMRC", placeType: "METRO", state: "Delhi", city: "New Delhi", name: "Central Secretariat Metro" },
   { source: "DMRC", placeType: "METRO", state: "Delhi", city: "New Delhi", name: "Kashmere Gate Metro" },
@@ -38,3 +45,4 @@ export const DELHI_NCR_TRANSPORT_PLACES: readonly TransportPlace[] = [
   { source: "DTC", placeType: "BUS_STOP", state: "Haryana", city: "Gurugram", name: "Gurugram Bus Stand" },
   { source: "DTC", placeType: "BUS_STOP", state: "Uttar Pradesh", city: "Noida", name: "Noida Bus Station" },
 ];
+import { DMRC_METRO_STATIONS } from "./dmrc-stations";
