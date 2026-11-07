@@ -2,6 +2,7 @@
 
 import { Input } from "@myfinds/ui/components/input";
 import { Label } from "@myfinds/ui/components/label";
+import { Select } from "@myfinds/ui/components/select";
 import { cn } from "@myfinds/ui/lib/utils";
 import { Search } from "lucide-react";
 
@@ -85,9 +86,9 @@ export function PlacePicker({ id, label, value, places, disabled, error, onChang
             State
             <RequiredMark />
           </Label>
-          <select
+          <Select
             id={`${id}-state`}
-            className={selectClassName}
+            className={selectClassName.replace("appearance-none pr-9", "")}
             value={value.stateId}
             disabled={disabled || places.length === 0}
             aria-required="true"
@@ -100,7 +101,7 @@ export function PlacePicker({ id, label, value, places, disabled, error, onChang
                 {state}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="grid gap-2">
@@ -108,9 +109,9 @@ export function PlacePicker({ id, label, value, places, disabled, error, onChang
             City
             <RequiredMark />
           </Label>
-          <select
+          <Select
             id={`${id}-city`}
-            className={selectClassName}
+            className={selectClassName.replace("appearance-none pr-9", "")}
             value={value.cityId}
             disabled={disabled || !value.stateId}
             aria-required="true"
@@ -123,7 +124,7 @@ export function PlacePicker({ id, label, value, places, disabled, error, onChang
                 {city}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
 

@@ -12,6 +12,8 @@
     "auth:generate": "varlock run -- bun x auth@latest generate --config src/services.ts --output ../../packages/db/prisma/schema/auth.prisma --yes"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1163.0",
+    "@aws-sdk/s3-request-presigner": "^3.1163.0",
     "@myfinds/auth": "workspace:*",
     "@myfinds/db": "workspace:*",
     "@myfinds/shared": "workspace:*",

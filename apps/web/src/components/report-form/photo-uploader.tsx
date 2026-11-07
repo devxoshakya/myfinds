@@ -1,7 +1,8 @@
 "use client";
 
 import { Button } from "@myfinds/ui/components/button";
-import { ImagePlus, LockKeyhole, Trash2, X } from "lucide-react";
+import { FileInput } from "@myfinds/ui/components/file-input";
+import { Trash2, X } from "lucide-react";
 import { useEffect, useState, type ChangeEvent } from "react";
 
 const accept = "image/jpeg,image/png,image/webp";
@@ -67,26 +68,17 @@ export function PhotoUploader({
         ))}
 
         {files.length < max ? (
-          <label
-            htmlFor={id}
-            className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1.5 border border-dashed border-border bg-surface-muted p-2 text-center hover:bg-muted focus-within:ring-2 focus-within:ring-ring"
-          >
-            <ImagePlus className="size-5" aria-hidden="true" />
-            <span className="text-xs font-medium">
-              {files.length === 0 ? "Add photos" : "Add another"}
-            </span>
-            <span className="text-[0.6875rem] text-muted-foreground">Click to browse</span>
-            <input
-              id={id}
-              type="file"
-              accept={accept}
-              multiple
-              className="sr-only"
-              aria-invalid={Boolean(error)}
-              aria-describedby={error ? `${id}-error` : `${id}-description`}
-              onChange={onChange}
-            />
-          </label>
+          <FileInput
+            id={id}
+            accept={accept}
+            multiple
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? `${id}-error` : `${id}-description`}
+            onChange={onChange}
+            label={files.length === 0 ? "Add photos" : "Add another"}
+            description="Click to browse"
+            className="aspect-square flex-col justify-center gap-1.5 p-2 text-center"
+          />
         ) : null}
       </div>
 
@@ -127,29 +119,15 @@ export function PrivatePhotoUploader({
         A close-up of something only the owner would know, such as a serial number. This photo is
         only previewed here and will not be saved yet.
       </p>
-      <label
-        htmlFor={id}
-        className="flex min-h-16 cursor-pointer items-center gap-3 border border-dashed border-border bg-surface-muted px-4 py-3 hover:bg-muted focus-within:ring-2 focus-within:ring-ring"
-      >
-        <LockKeyhole className="size-5 shrink-0" aria-hidden="true" />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">
-            {file ? file.name : "Upload private verification proof"}
-          </span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">
-            Not saved yet. JPEG, PNG or WebP, up to 5 MB
-          </span>
-        </span>
-        <input
-          id={id}
-          type="file"
-          accept={accept}
-          className="sr-only"
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? `${id}-error` : `${id}-description`}
-          onChange={onChange}
-        />
-      </label>
+      <FileInput
+        id={id}
+        accept={accept}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${id}-error` : `${id}-description`}
+        onChange={onChange}
+        label={file ? file.name : "Upload private verification proof"}
+        description="Not saved yet. JPEG, PNG or WebP, up to 5 MB"
+      />
       {file ? (
         <Button type="button" variant="link" className="w-fit justify-start px-0" onClick={onRemove}>
           <Trash2 data-icon="inline-start" aria-hidden="true" />

@@ -1,6 +1,4 @@
-import { Label } from "@myfinds/ui/components/label";
-import { cn } from "@myfinds/ui/lib/utils";
-import { AlertCircle } from "lucide-react";
+import { Field } from "@myfinds/ui/components/field";
 import type { ReactNode } from "react";
 
 export function RequiredMark() {
@@ -31,31 +29,23 @@ export function FormField({
   className?: string;
 }) {
   return (
-    <div className={cn("grid gap-2", className)}>
-      <Label htmlFor={id} className="text-sm font-semibold">
-        {label}
-        {required ? <RequiredMark /> : null}
-        {optional ? (
-          <span className="font-normal text-muted-foreground">(optional)</span>
-        ) : null}
-      </Label>
+    <Field
+      id={id}
+      className={className}
+      description={description}
+      error={error}
+      required={required}
+      label={
+        <>
+          {label}
+          {optional ? (
+            <span className="ml-1 font-normal text-muted-foreground">(optional)</span>
+          ) : null}
+        </>
+      }
+    >
       {children}
-      {description ? (
-        <p id={`${id}-description`} className="text-sm leading-5 text-muted-foreground">
-          {description}
-        </p>
-      ) : null}
-      {error ? (
-        <p
-          id={`${id}-error`}
-          role="alert"
-          className="flex items-start gap-1.5 text-sm text-destructive"
-        >
-          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          {error}
-        </p>
-      ) : null}
-    </div>
+    </Field>
   );
 }
 

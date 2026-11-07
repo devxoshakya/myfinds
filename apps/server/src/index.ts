@@ -4,9 +4,11 @@ import express from "express";
 
 import { ENV } from "./env.server";
 import { placesRouter } from "./routes/places";
+import { createPhotosRouter } from "./routes/photos";
 import { createReportStatusRouter } from "./routes/report-status";
 import { reportsRouter } from "./routes/reports";
-import { auth } from "./services";
+import { auth, db } from "./services";
+import { createPhotoStorage } from "./services/photos";
 
 const app = express();
 
@@ -25,6 +27,19 @@ app.use(express.json());
 app.use("/api/places", placesRouter);
 app.use("/api/reports/status", createReportStatusRouter());
 app.use("/api/reports", reportsRouter);
+app.use(
+  "/api/photos",
+  createPhotosRouter(
+    db,
+    createPhotoStorage({
+      accountId: ENV.R2_ACCOUNT_ID,
+      accessKeyId: ENV.R2_ACCESS_KEY_ID,
+      secretAccessKey: ENV.R2_SECRET_ACCESS_KEY,
+      bucketName: ENV.R2_BUCKET_NAME,
+    }),
+    (headers) => auth.api.getSession({ headers }),
+  ),
+);
 
 app.get("/", (_req, res) => {
   res.status(200).send("OK");

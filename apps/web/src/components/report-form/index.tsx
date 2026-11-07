@@ -2,6 +2,7 @@
 
 import { Button } from "@myfinds/ui/components/button";
 import { Input } from "@myfinds/ui/components/input";
+import { Select } from "@myfinds/ui/components/select";
 import { Textarea } from "@myfinds/ui/components/textarea";
 import { cn } from "@myfinds/ui/lib/utils";
 import {
@@ -29,6 +30,7 @@ import {
   submitReport,
   type PlaceDirectoryEntry,
 } from "@/lib/report-api";
+import { uploadReportPhoto } from "@/lib/photo-upload";
 
 import { FormField, RequiredMark, SectionCard } from "./fields";
 import { PhotoUploader, PrivatePhotoUploader } from "./photo-uploader";
@@ -332,6 +334,12 @@ export default function ReportForm({ kind }: ReportFormProps) {
     }
     try {
       const created = await submitReport(apiValidation.data, idempotencyKeyRef.current.key);
+      for (const photo of itemPhotos) {
+        await uploadReportPhoto(created.report.id, photo, "ITEM");
+      }
+      if (proofPhoto) {
+        await uploadReportPhoto(created.report.id, proofPhoto, "PROOF");
+      }
       setCreatedReport(created);
       requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
     } catch (error) {
@@ -571,9 +579,9 @@ export default function ReportForm({ kind }: ReportFormProps) {
                 </FormField>
 
                 <FormField id="category" label="Category" required error={errors.category}>
-                  <select
+                  <Select
                     id="category"
-                    className={`${inputClassName} w-full border border-input bg-card`}
+                    className={inputClassName}
                     value={values.category}
                     aria-required="true"
                     aria-invalid={Boolean(errors.category)}
@@ -590,7 +598,7 @@ export default function ReportForm({ kind }: ReportFormProps) {
                           .join(" ")}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </FormField>
 
                 <FormField id="brand" label="Brand" optional error={errors.brand}>
