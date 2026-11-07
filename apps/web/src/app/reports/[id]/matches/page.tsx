@@ -48,8 +48,8 @@ export default async function MatchesPage({ params }: PageProps) {
               ? `We found ${matches.length} possible ${matches.length === 1 ? "match" : "matches"}`
               : "No matches yet"}
           </h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base">
-            Review the found item against your lost report. If you recognize it, start a claim.
+          <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground sm:text-base">
+            Review each possible match against your lost report. If you recognize it, start a claim.
           </p>
         </div>
 
@@ -68,7 +68,18 @@ export default async function MatchesPage({ params }: PageProps) {
         Sample data. Claims are not sent to a server in this build.
       </p>
 
-      <MatchReview report={report} matches={matches} />
+      {matches.length > 0 ? (
+        <MatchReview report={report} matches={matches} />
+      ) : (
+        <section className="mt-6 border border-border bg-card p-6 sm:p-8" aria-labelledby="empty-matches">
+          <h2 id="empty-matches" className="text-lg font-semibold">
+            No possible matches yet
+          </h2>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+            We will keep checking new found reports until your report expires.
+          </p>
+        </section>
+      )}
     </div>
   );
 }

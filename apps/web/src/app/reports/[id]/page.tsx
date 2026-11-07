@@ -140,7 +140,7 @@ function NextAction({ report }: { report: PreviewReport }) {
 
   if (report.status === "MATCHING") {
     return (
-      <Banner title="We're looking for matches." action={<OutlineChip>Checking daily</OutlineChip>}>
+      <Banner title="We're looking for a possible match." action={<OutlineChip>Checking daily</OutlineChip>}>
         Nothing has matched yet. We keep searching until {formatDate(report.expiresAt)}.
       </Banner>
     );

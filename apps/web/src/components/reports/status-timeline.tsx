@@ -31,7 +31,7 @@ const baseSteps: Step[] = [
   },
   {
     key: "MATCH_FOUND",
-    title: "Match found",
+    title: "Possible match",
     description: "A possible match appeared.",
     statuses: ["MATCH_FOUND"],
   },

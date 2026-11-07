@@ -90,7 +90,7 @@ export const statusLabels: Record<ReportStatus, string> = {
   SUBMITTED_TO_STOP: "Submitted to stop",
   RECEIVED_BY_STOP: "Received by stop",
   MATCHING: "Matching",
-  MATCH_FOUND: "Match found",
+  MATCH_FOUND: "Possible match",
   CLAIMED: "Claimed",
   VERIFIED: "Verified",
   RETURNED: "Returned",
