@@ -128,9 +128,9 @@ Several owners may have `SUGGESTED` matches on one found report. Pending claims 
 
 **P0** = the core loop (report, match, verify, return) or custody breaks without it. **P1** = needed for a safe launch, built after the loop works. IDs are build order.
 
-### F-01 Signup, login, and verification (P0)
-- Email plus password (credential login only — no social login). A new account must verify email (link or code) before creating reports or claims.
-- Acceptance: unverified user sees a "Verify to continue" screen on `/report/*` and gets 403 from the API; verified user proceeds.
+### F-01 Signup and login (P0)
+- Email plus password (credential login only — no social login, email verification, or phone OTP).
+- Acceptance: a new account can sign in and create reports immediately after signup.
 
 ### F-02 Roles and permission check (P0)
 - One function `can(user, action, ctx)` in `packages/shared` decides every permission. Routes never inline role checks.

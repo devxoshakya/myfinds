@@ -11,7 +11,7 @@ import {
 } from "../services/photos";
 
 type PhotoSession = {
-  user: Pick<Session["user"], "id" | "emailVerified">;
+  user: Pick<Session["user"], "id">;
 };
 
 const photoInputSchema = z.object({
@@ -39,11 +39,6 @@ export function createPhotosRouter(
       response.status(401).json({ error: { code: "UNAUTHENTICATED", message: "Sign in first." } });
       return;
     }
-    if (!session.user.emailVerified) {
-      response.status(403).json({ error: { code: "NOT_VERIFIED", message: "Verify your email first." } });
-      return;
-    }
-
     const parsed = photoInputSchema.safeParse(request.body);
     if (!parsed.success) {
       response.status(422).json({ error: { code: "VALIDATION_FAILED", message: "Invalid photo." } });

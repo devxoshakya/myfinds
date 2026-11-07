@@ -43,6 +43,46 @@ const myReportSchema = z.object({
 
 const myReportsResponseSchema = z.object({ reports: z.array(myReportSchema) });
 
+const reportHistorySchema = z.object({
+  status: z.string(),
+  action: z.string(),
+  date: z.string().datetime(),
+});
+
+const reportDetailSchema = z.object({
+  report: myReportSchema.extend({
+    description: z.string().nullable(),
+    color: z.string().nullable(),
+    brand: z.string().nullable(),
+    history: z.array(reportHistorySchema),
+  }),
+});
+
+const reportMatchesResponseSchema = z.object({
+  report: z.object({
+    id: z.string(),
+    title: z.string(),
+    category: z.enum(reportCategories),
+    eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    expiresAt: z.string().datetime(),
+    place: z.object({ station: z.string(), city: z.string() }),
+  }),
+  matches: z.array(
+    z.object({
+      id: z.string(),
+      score: z.number(),
+      scoreBreakdown: z.record(z.string(), z.number()),
+      candidate: z.object({
+        id: z.string(),
+        title: z.string(),
+        category: z.enum(reportCategories),
+        eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        place: z.object({ station: z.string(), city: z.string() }),
+      }),
+    }),
+  ),
+});
+
 const createReportResponseSchema = z.object({
   report: z.object({
     id: z.string(),
@@ -65,6 +105,8 @@ type CreateReportResponse = z.infer<typeof createReportResponseSchema>;
 export type PlaceDirectoryEntry = z.infer<typeof placeDirectoryEntrySchema>;
 export type PrivateReportStatus = z.infer<typeof privateReportStatusSchema>;
 export type MyReport = z.infer<typeof myReportSchema>;
+export type ReportDetail = z.infer<typeof reportDetailSchema>["report"];
+export type ReportMatch = z.infer<typeof reportMatchesResponseSchema>;
 
 export class ReportApiError extends Error {
   constructor(
@@ -169,6 +211,60 @@ export async function getMyReports(request: typeof fetch = fetch): Promise<MyRep
     );
   }
   return parsedReports.data.reports;
+}
+
+async function parseApiBody(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    throw new Error("The report service returned an invalid response.");
+  }
+}
+
+export async function getReport(
+  id: string,
+  request: typeof fetch = fetch,
+): Promise<ReportDetail | null> {
+  const response = await request(getApiUrl(`/api/reports/${encodeURIComponent(id)}`), {
+    cache: "no-store",
+    credentials: "include",
+  });
+  if (response.status === 404) return null;
+  const body = await parseApiBody(response);
+  if (!response.ok) {
+    const parsedError = errorResponseSchema.safeParse(body);
+    throw new ReportApiError(
+      parsedError.success ? parsedError.data.error.message : "The report is unavailable.",
+      parsedError.success ? parsedError.data.error.code : "INVALID_RESPONSE",
+      response.status,
+    );
+  }
+  const parsed = reportDetailSchema.safeParse(body);
+  if (!parsed.success) throw new Error("The report service returned an invalid response.");
+  return parsed.data.report;
+}
+
+export async function getReportMatches(
+  id: string,
+  request: typeof fetch = fetch,
+): Promise<ReportMatch | null> {
+  const response = await request(getApiUrl(`/api/reports/${encodeURIComponent(id)}/matches`), {
+    cache: "no-store",
+    credentials: "include",
+  });
+  if (response.status === 404) return null;
+  const body = await parseApiBody(response);
+  if (!response.ok) {
+    const parsedError = errorResponseSchema.safeParse(body);
+    throw new ReportApiError(
+      parsedError.success ? parsedError.data.error.message : "Report matches are unavailable.",
+      parsedError.success ? parsedError.data.error.code : "INVALID_RESPONSE",
+      response.status,
+    );
+  }
+  const parsed = reportMatchesResponseSchema.safeParse(body);
+  if (!parsed.success) throw new Error("The report service returned an invalid response.");
+  return parsed.data;
 }
 
 export function mapReportApiFields(fields: Record<string, string>) {

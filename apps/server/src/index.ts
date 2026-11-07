@@ -14,9 +14,19 @@ const app = express();
 
 app.use(
   cors({
-    origin: ENV.CORS_ORIGIN,
+    origin: (requestOrigin, callback) => {
+      if (!requestOrigin || requestOrigin === ENV.CORS_ORIGIN) {
+        callback(null, true);
+        return;
+      }
+      console.warn("CORS origin rejected", {
+        origin: requestOrigin,
+        allowedOrigin: ENV.CORS_ORIGIN,
+      });
+      callback(null, false);
+    },
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
     credentials: true,
   }),
 );

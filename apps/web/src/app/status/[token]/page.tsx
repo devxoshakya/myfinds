@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { LockKeyhole } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { ReportNumber, StatusChip } from "@/components/reports/status-badge";
@@ -31,7 +32,10 @@ export default async function PrivateReportStatusPage({ params }: PageProps) {
   return (
     <article className="mx-auto grid w-full max-w-5xl gap-5 px-4 py-8 sm:px-6 sm:py-12">
       <header className="grid gap-3 border border-border bg-card p-5 sm:p-7">
-        <p className="text-sm text-muted-foreground">Private report status</p>
+        <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+          <LockKeyhole className="size-4" aria-hidden="true" />
+          Private report status
+        </p>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">Your report</h1>
           <StatusChip status={report.status} />
@@ -56,8 +60,9 @@ export default async function PrivateReportStatusPage({ params }: PageProps) {
       </header>
 
       <StatusTimeline report={report} />
-      <p className="text-xs leading-5 text-muted-foreground">
-        This is a private link. Anyone with the link can view this limited status information.
+      <p className="border border-border bg-surface-muted p-3 text-xs leading-5 text-muted-foreground">
+        Anyone with this private link can view limited status information. Do not post it publicly
+        or share it in a public message.
       </p>
     </article>
   );

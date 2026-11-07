@@ -5,16 +5,33 @@ import { Bell, X } from "lucide-react";
 import Link from "next/link";
 
 import { authClient } from "@/lib/auth-client";
-import { openReports } from "@/lib/preview-data";
+import { getMyReports, type MyReport } from "@/lib/report-api";
 import { matchesPath, reportPath } from "@/lib/routes";
 import { useState } from "react";
+import { useEffect } from "react";
 
 export default function HomeBanner() {
   const { data: session, isPending } = authClient.useSession();
   const [dismissed, setDismissed] = useState(false);
+  const [reports, setReports] = useState<MyReport[]>([]);
+
+  useEffect(() => {
+    if (!session) return;
+    getMyReports()
+      .then(setReports)
+      .catch((error: unknown) => {
+        console.error("Home activity request failed", {
+          errorName: error instanceof Error ? error.name : "unknown",
+        });
+        setReports([]);
+      });
+  }, [session]);
 
   if (isPending || !session || dismissed) return null;
 
+  const openReports = reports.filter(
+    (report) => !["RETURNED", "EXPIRED", "WITHDRAWN"].includes(report.status),
+  );
   const reportWithMatch = openReports.find(
     (report) => report.status === "MATCH_FOUND" || report.status === "CLAIMED",
   );
@@ -28,7 +45,7 @@ export default function HomeBanner() {
         <Bell className="mt-0.5 size-4 shrink-0 sm:mt-0" aria-hidden="true" />
         <p className="min-w-0 flex-1 text-sm leading-5">
           {reportWithMatch
-            ? `Match found for “${reportWithMatch.title}” at ${reportWithMatch.place.station}.`
+            ? `Possible match for “${reportWithMatch.title}” at ${reportWithMatch.place.station}.`
             : `You have ${count} open ${count === 1 ? "report" : "reports"}.`}
         </p>
         <Button

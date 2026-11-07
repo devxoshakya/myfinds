@@ -149,7 +149,7 @@ describe("GET /api/reports/mine", () => {
     }, database);
 
     await withServer(
-      async () => ({ user: { id: "signed-in-user", role: "USER", emailVerified: true } }),
+      async () => ({ user: { id: "signed-in-user", role: "USER" } }),
       async (url) => {
         const response = await fetch(`${url}/mine?reporterId=other-user`);
         const body = z
@@ -195,7 +195,7 @@ describe("GET /api/reports/mine", () => {
 });
 
 describe("POST /api/reports", () => {
-  it("requires a signed-in, verified session", async () => {
+  it("requires a signed-in session", async () => {
     await withServer(async () => null, async (url) => {
       const response = await fetch(url, { method: "POST", body: JSON.stringify(lostReport) });
       expect(response.status).toBe(401);
@@ -203,20 +203,24 @@ describe("POST /api/reports", () => {
     });
 
     await withServer(
-      async () => ({
-        user: { id: "user-id", role: "USER", emailVerified: false },
-      }),
+      async () => ({ user: { id: "user-id", role: "USER" } }),
       async (url) => {
-        const response = await fetch(url, { method: "POST", body: JSON.stringify(lostReport) });
-        expect(response.status).toBe(403);
-        expect(await response.json()).toMatchObject({ error: { code: "NOT_VERIFIED" } });
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": "550e8400-e29b-41d4-a716-446655440000",
+          },
+          body: JSON.stringify(lostReport),
+        });
+        expect(response.status).not.toBe(403);
       },
     );
   });
 
   it("rejects client-supplied server-owned fields and returns no private answers", async () => {
     const session = {
-      user: { id: "verified-user", role: "USER", emailVerified: true },
+      user: { id: "verified-user", role: "USER" },
     };
 
     await withServer(async () => session, async (url) => {
@@ -264,7 +268,7 @@ describe("POST /api/reports", () => {
     const counters = { reportCreateAttempts: 0 };
     const database = fakeDatabase(undefined, counters);
     const session = {
-      user: { id: "verified-user", role: "USER", emailVerified: true },
+      user: { id: "verified-user", role: "USER" },
     };
     const idempotencyKey = "550e8400-e29b-41d4-a716-446655440000";
     const found = {

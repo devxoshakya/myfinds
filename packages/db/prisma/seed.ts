@@ -77,8 +77,8 @@ async function main() {
     users.push(
       await db.user.upsert({
         where: { email },
-        update: { name, emailVerified: true, role: "USER" },
-        create: { id, name, email, emailVerified: true, role: "USER" },
+        update: { name, role: "USER" },
+        create: { id, name, email, role: "USER" },
       }),
     );
   }
