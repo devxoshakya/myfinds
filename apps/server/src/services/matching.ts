@@ -35,7 +35,7 @@ function toMatchReport(report: {
   color: string | null;
   eventDate: Date;
   expiresAt: Date;
-  status: string;
+  status: MatchReport["status"];
   placeStation: { id: string; cityId: string; placeType: string };
 }): MatchReport {
   return {
@@ -122,6 +122,28 @@ export async function refreshMatchesForReport(
       .map((match) => match.id);
     if (staleIds.length > 0) {
       await transaction.match.deleteMany({ where: { id: { in: staleIds } } });
+    }
+
+    const nextStatus: "MATCHING" | "MATCH_FOUND" | "SUBMITTED_TO_STOP" =
+      matches.length > 0
+        ? "MATCH_FOUND"
+        : current.status === "SUBMITTED_TO_STOP"
+          ? current.status
+          : "MATCHING";
+    if (nextStatus !== current.status) {
+      await transaction.report.update({
+        where: { id: current.id },
+        data: { status: nextStatus },
+      });
+      await transaction.statusHistory.create({
+        data: {
+          reportId: current.id,
+          fromStatus: current.status,
+          toStatus: nextStatus,
+          actorRole: "SYSTEM",
+          action: matches.length > 0 ? "MATCH_FOUND" : "MATCHING_STARTED",
+        },
+      });
     }
   });
 

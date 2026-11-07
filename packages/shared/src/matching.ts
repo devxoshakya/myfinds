@@ -1,13 +1,17 @@
+import { reportStatuses } from "./report-validation";
+
 export const MATCH_MIN_SCORE = 0.65;
 export const MATCH_DATE_WINDOW_DAYS = 14;
 export const MATCH_MAX_PER_REPORT = 5;
 
 export type MatchableStatus =
   | "SUBMITTED"
+  | "SUBMITTED_TO_STOP"
   | "MATCHING"
   | "MATCH_FOUND"
   | "RECEIVED_BY_STOP"
   | "CLAIMED";
+export type ReportStatus = (typeof reportStatuses)[number];
 
 export type MatchReport = {
   id: string;
@@ -19,7 +23,7 @@ export type MatchReport = {
   color?: string | null;
   eventDate: Date;
   expiresAt: Date;
-  status: string;
+  status: ReportStatus;
   stationId: string;
   cityId: string;
   placeType: string;
