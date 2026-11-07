@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   copyReportCode,
+  getReport,
+  getReportMatches,
   getPrivateReportStatus,
   getMyReports,
   mapReportApiFields,
@@ -211,6 +213,73 @@ describe("getMyReports", () => {
       "https://api.example.test/api/reports/mine",
       expect.objectContaining({ cache: "no-store", credentials: "include" }),
     );
+  });
+
+  describe("report detail and matches", () => {
+    it("parses a real report detail response", async () => {
+      process.env.NEXT_PUBLIC_SERVER_URL = "https://api.example.test";
+      const request = vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            report: {
+              id: "report-id",
+              number: "MF-1042",
+              type: "LOST",
+              title: "Leather wallet",
+              category: "WALLET",
+              description: "A private detail",
+              color: "Black",
+              brand: "Baggit",
+              status: "MATCH_FOUND",
+              eventDate: "2026-11-04",
+              expiresAt: "2027-01-03T00:00:00.000Z",
+              place: { station: "Central", city: "Example City" },
+              history: [
+                {
+                  status: "MATCH_FOUND",
+                  action: "MATCH_FOUND",
+                  date: "2026-11-04T10:00:00.000Z",
+                },
+              ],
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+
+      await expect(getReport("report-id", request)).resolves.toMatchObject({
+        id: "report-id",
+        status: "MATCH_FOUND",
+      });
+    });
+
+    it("parses matches and returns null for a missing report", async () => {
+      process.env.NEXT_PUBLIC_SERVER_URL = "https://api.example.test";
+      const request = vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            report: {
+              id: "report-id",
+              title: "Leather wallet",
+              category: "WALLET",
+              eventDate: "2026-11-04",
+              expiresAt: "2027-01-03T00:00:00.000Z",
+              place: { station: "Central", city: "Example City" },
+            },
+            matches: [],
+          }),
+          { status: 200 },
+        ),
+      );
+
+      await expect(getReportMatches("report-id", request)).resolves.toMatchObject({
+        matches: [],
+      });
+      expect(request).toHaveBeenCalledWith(
+        "https://api.example.test/api/reports/report-id/matches",
+        expect.objectContaining({ cache: "no-store", credentials: "include" }),
+      );
+    });
   });
 
   it("surfaces an unauthenticated response instead of showing sample reports", async () => {

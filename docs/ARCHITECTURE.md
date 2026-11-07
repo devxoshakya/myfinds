@@ -25,11 +25,11 @@ apps/web (Next.js) --> report and status UI
 | Runtime | Node 22 LTS, TypeScript (strict) | pnpm workspaces |
 | Monorepo | Turborepo | See section 3 |
 | Web | Next.js (App Router), React, Tailwind CSS, shadcn/ui | Pin versions in lockfile |
-| Auth | Better Auth | Email+password only (credential login), email verification, role field |
+| Auth | Better Auth | Email+password only (credential login), role field |
 | DB | PostgreSQL + Prisma | Raw SQL for search and matching; extensions `pg_trgm` |
 | Storage | Cloudflare R2 via `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` | Private bucket |
 | Cache/limits | Redis (Upstash, HTTP client) | Better Auth `secondaryStorage` can share it |
-| Email | SendGrid | Transactional email only (verification, match/claim events, handover code) |
+| Email | SendGrid | Transactional email only (match/claim events, handover code) |
 | Validation | Zod | Shared client and server schemas |
 | Forms | React Hook Form + `@hookform/resolvers/zod` | |
 | Data fetching | TanStack Query for client reads; server components for first load | |
@@ -131,7 +131,6 @@ model User {
   id                  String   @id
   name                String
   email               String   @unique
-  emailVerified       Boolean  @default(false)
   image               String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -348,9 +347,7 @@ If Prisma's `Unsupported` column causes migration drift, keep the column only in
 
 ## 6. Auth and permissions
 
-**Better Auth setup (intent).** Prisma adapter; email+password with email verification; `user.additionalFields.role` (default `USER`, `input: false` so clients cannot set it); the Next.js cookie plugin; Redis as secondary storage for sessions and rate limits. Session helper `requireUser()` returns `{ id, role, emailVerified, stationIds[] }` (stationIds loaded from `StationStaff`).
-
-**Verified gate.** `requireVerifiedUser()` = `requireUser()` plus email verification true, else 403 `NOT_VERIFIED`. Used by every mutating report or claim route (BR-14).
+**Better Auth setup (intent).** Prisma adapter; email+password without email or phone verification; `user.additionalFields.role` (default `USER`, `input: false` so clients cannot set it); the Next.js cookie plugin; Redis as secondary storage for sessions and rate limits. Session helper `requireUser()` returns `{ id, role, stationIds[] }` (stationIds loaded from `StationStaff`).
 
 **`can(user, action, ctx)`** in `packages/shared/src/permissions.ts` is the only place permissions are decided. `ctx` carries the relevant report, match, claim, and station ids. Actions and rules:
 
@@ -383,7 +380,7 @@ Routes are mounted in the existing Express backend under `apps/server/src/routes
 { "error": { "code": "VALIDATION_FAILED", "message": "Human readable", "fields": { "title": "Required" } } }
 ```
 
-Codes: `UNAUTHENTICATED` 401, `NOT_VERIFIED` 403, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_FAILED` 422, `CONFLICT` 409, `RATE_LIMITED` 429, `CLAIM_LOCKED` 423, `CODE_INVALID` 400, `CODE_EXPIRED` 410, `INTERNAL_ERROR` 500.
+Codes: `UNAUTHENTICATED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_FAILED` 422, `CONFLICT` 409, `RATE_LIMITED` 429, `CLAIM_LOCKED` 423, `CODE_INVALID` 400, `CODE_EXPIRED` 410, `INTERNAL_ERROR` 500.
 
 | Method and path | Who | Request (summary) | Response (summary) |
 | --- | --- | --- | --- |
@@ -543,7 +540,7 @@ Each milestone ends with passing tests and a deployable app. Do them in order; m
 | --- | --- | --- |
 | M0 | Turborepo, Next.js, Tailwind, shadcn, Prisma, CI, Vercel project, `.env.example` | App deploys; `pnpm build`, lint, and tests run in CI |
 | M1 | Schema and migrations (section 5), seed, `packages/shared` (enums, config, `can()`, status machine) | Seed runs; permission and transition tests pass |
-| M2 | Better Auth: email+password cred login only, roles, email-verified gate, login/signup/verify-email screens | A user can sign up, verify email, and sees role-aware nav |
+| M2 | Better Auth: email+password credential login only, roles, signup/login screens | A user can sign up and sees role-aware nav |
 | M3 (parallel) | Places API, place picker component, admin places screens | Picker works end to end; admin can add a station |
 | M4 (parallel) | Photo pipeline: sign, upload, confirm, signed read, uploader component | Upload and view a photo; limits and visibility enforced |
 | M5 | Report forms (lost, found, staff drop-off), create-report service, My Reports, Report Status (basic) | F-04, F-05 acceptance pass; history rows written |

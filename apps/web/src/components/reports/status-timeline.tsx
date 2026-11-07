@@ -3,6 +3,7 @@ import { Check } from "lucide-react";
 
 import type { PreviewReport, ReportStatus } from "@/lib/preview-data";
 import type { PrivateReportStatus } from "@/lib/report-api";
+import { isRejectedHistoryAction } from "@/lib/status-history";
 
 type Step = {
   key: string;
@@ -20,37 +21,37 @@ const baseSteps: Step[] = [
   {
     key: "SUBMITTED",
     title: "Submitted",
-    description: "Your report is in.",
+    description: "We saved your report.",
     statuses: ["SUBMITTED"],
   },
   {
     key: "MATCHING",
     title: "Matching",
-    description: "We search every day.",
+    description: "We check eligible found reports.",
     statuses: ["MATCHING"],
   },
   {
     key: "MATCH_FOUND",
     title: "Possible match",
-    description: "A possible match appeared.",
+    description: "Review the details before claiming.",
     statuses: ["MATCH_FOUND"],
   },
   {
     key: "CLAIMED",
     title: "Claimed",
-    description: "Ownership answers sent.",
+    description: "The custodian is reviewing your answers.",
     statuses: ["CLAIMED"],
   },
   {
     key: "VERIFIED",
     title: "Verified",
-    description: "Approved, code issued.",
+    description: "Follow the handover instructions.",
     statuses: ["VERIFIED"],
   },
   {
     key: "RETURNED",
     title: "Returned",
-    description: "Handover complete.",
+    description: "The item has been returned.",
     statuses: ["RETURNED"],
   },
 ];
@@ -206,7 +207,7 @@ export function StatusTimeline({
           <span
             className={cn(
               "border px-2 py-1 font-mono text-[0.625rem] tracking-[0.04em] uppercase",
-              report.history.some((entry) => entry.action.toLowerCase().includes("rejected"))
+              report.history.some((entry) => isRejectedHistoryAction(entry.action))
                 ? "border-foreground text-foreground"
                 : "border-border text-muted-foreground",
             )}

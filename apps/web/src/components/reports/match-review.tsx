@@ -299,7 +299,7 @@ export function MatchReview({ report, matches }: { report: PreviewReport; matche
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 shadow-[0_2px_12px_rgba(0,0,0,0.12)] backdrop-blur">
         <div className="mx-auto flex w-full max-w-[70rem] flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p className="flex items-start gap-2 text-sm text-muted-foreground">
+          <p className="flex max-w-xl items-start gap-2 text-sm text-muted-foreground">
             <Minus className="mt-0.5 size-4 shrink-0 lg:hidden" aria-hidden="true" />
             You'll answer a question only the owner would know. You have 3 attempts.
           </p>

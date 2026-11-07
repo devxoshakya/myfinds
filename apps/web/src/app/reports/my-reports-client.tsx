@@ -29,6 +29,21 @@ function formatDate(value: string) {
   return dateFormatter.format(new Date(value.length === 10 ? `${value}T00:00:00Z` : value));
 }
 
+function statusSummary(status: MyReport["status"]) {
+  return {
+    SUBMITTED: "Report received",
+    SUBMITTED_TO_STOP: "Waiting for station receipt",
+    RECEIVED_BY_STOP: "Ready for matching",
+    MATCHING: "Checking for a possible match",
+    MATCH_FOUND: "Possible match found",
+    CLAIMED: "Claim submitted",
+    VERIFIED: "Ownership confirmed",
+    RETURNED: "Item returned",
+    EXPIRED: "Report expired",
+    WITHDRAWN: "Report withdrawn",
+  }[status];
+}
+
 export default function MyReportsClient() {
   const [reports, setReports] = useState<MyReport[] | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -112,6 +127,7 @@ export default function MyReportsClient() {
                     </div>
 
                     <h3 className="mt-3 text-base font-semibold">{report.title}</h3>
+                    <p className="mt-1 text-sm font-medium">{statusSummary(report.status)}</p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {report.type === "LOST" ? "Lost near" : "Found at"} {report.place.station},{" "}
                       {report.place.city} · {formatDate(report.eventDate)}
@@ -127,6 +143,14 @@ export default function MyReportsClient() {
                         <dd className="font-medium">{formatDate(report.expiresAt)}</dd>
                       </div>
                     </dl>
+                    <Button
+                      className="mt-4 h-10"
+                      variant="outline"
+                      render={<Link href={`/reports/${report.id}`} />}
+                      nativeButton={false}
+                    >
+                      View report
+                    </Button>
                   </article>
                 </li>
               ))}
@@ -147,11 +171,6 @@ export default function MyReportsClient() {
             Report a lost item
           </Button>
         </div>
-      ) : null}
-      {reports.length > 0 ? (
-        <p className="mt-6 text-sm text-muted-foreground">
-          Report details and matching actions are not connected yet.
-        </p>
       ) : null}
     </>
   );

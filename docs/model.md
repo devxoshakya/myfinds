@@ -49,7 +49,7 @@ User *—* Station via StationStaff (staff scope)
 
 | Table | Purpose | Key fields | Notes |
 | --- | --- | --- | --- |
-| `user` (Better Auth) | Accounts | `role` (`USER`/`STATION_STAFF`/`ADMIN`, default `USER`, **not client-settable**), `email`, `emailVerified` | Contact details are never exposed cross-user before approval (BR-22) |
+| `user` (Better Auth) | Accounts | `role` (`USER`/`STATION_STAFF`/`ADMIN`, default `USER`, **not client-settable**), `email` | Contact details are never exposed cross-user before approval (BR-22) |
 | `StationStaff` | Links staff accounts to stations | `(userId, stationId)` PK, `addedById`, `active` | One staff member may belong to several stations; only admin adds staff (PRD §11) |
 
 ### 2.3 Reports (the central table)
@@ -155,7 +155,7 @@ Grouped by area. Each is phrased to be automatable (unit via Vitest, integration
 
 ### Auth, roles & permissions
 
-- **AC-AUTH-01** Unverified user (missing email verification, BR-14) gets a "Verify to continue" screen on `/report/*` and 403 `NOT_VERIFIED` from every mutating report/claim API. *(e2e.)*
+- **AC-AUTH-01** A newly signed-up user can create a report after signing in without an email or phone verification step. *(e2e.)*
 - **AC-AUTH-02** A client cannot set `role`, status, custody, or decision fields; posting them is ignored or 422s. *(Integration test posting over-payloaded bodies.)*
 - **AC-AUTH-03** Every row of the permission matrix (ARCHITECTURE.md §6) passes for all three roles, including negative cases; a staff member of station A cannot act on station B's items. *(Vitest, one test per action×role cell.)*
 - **AC-AUTH-04** Login is email+password only: no social provider buttons or phone-OTP flows exist anywhere in the UI or API surface. *(Code review + e2e signup happy path.)*

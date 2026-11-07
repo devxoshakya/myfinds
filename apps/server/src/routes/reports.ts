@@ -16,7 +16,7 @@ import {
 import { refreshMatchesForReport } from "../services/matching";
 
 type ReportSession = {
-  user: Pick<Session["user"], "id" | "role" | "emailVerified">;
+  user: Pick<Session["user"], "id" | "role">;
 };
 
 type ReportsRouterDependencies = {
@@ -184,6 +184,189 @@ export function createReportsRouter({
     }
   });
 
+  router.get("/:id", async (request, response) => {
+    response.setHeader("Cache-Control", "private, no-store, max-age=0");
+    const session = await getSession(request.headers);
+    if (!session) {
+      response.status(401).json({
+        error: { code: "UNAUTHENTICATED", message: "Sign in to view this report." },
+      });
+      return;
+    }
+
+    try {
+      const report = await database.report.findFirst({
+        where: { id: request.params.id, reporterId: session.user.id },
+        select: {
+          id: true,
+          number: true,
+          type: true,
+          title: true,
+          category: true,
+          description: true,
+          color: true,
+          brand: true,
+          eventDate: true,
+          status: true,
+          expiresAt: true,
+          placeStation: {
+            select: { name: true, city: { select: { name: true } } },
+          },
+          history: {
+            orderBy: { createdAt: "asc" },
+            select: { toStatus: true, action: true, createdAt: true },
+          },
+        },
+      });
+      if (!report) {
+        response.status(404).json({
+          error: { code: "NOT_FOUND", message: "Report was not found." },
+        });
+        return;
+      }
+
+      response.json({
+        report: {
+          id: report.id,
+          number: `MF-${report.number}`,
+          type: report.type,
+          title: report.title,
+          category: report.category,
+          description: report.description,
+          color: report.color,
+          brand: report.brand,
+          eventDate: report.eventDate.toISOString().slice(0, 10),
+          status: report.status,
+          expiresAt: report.expiresAt.toISOString(),
+          place: { station: report.placeStation.name, city: report.placeStation.city.name },
+          history: report.history
+            .filter((entry) => entry.toStatus)
+            .map((entry) => ({
+              status: entry.toStatus,
+              action: entry.action,
+              date: entry.createdAt.toISOString(),
+            })),
+        },
+      });
+    } catch (error) {
+      console.error("Report detail request failed", {
+        errorName: error instanceof Error ? error.name : "unknown",
+      });
+      response.status(500).json({
+        error: { code: "INTERNAL_ERROR", message: "Report details are unavailable." },
+      });
+    }
+  });
+
+  router.get("/:id/matches", async (request, response) => {
+    response.setHeader("Cache-Control", "private, no-store, max-age=0");
+    const session = await getSession(request.headers);
+    if (!session) {
+      response.status(401).json({
+        error: { code: "UNAUTHENTICATED", message: "Sign in to view report matches." },
+      });
+      return;
+    }
+
+    try {
+      const report = await database.report.findFirst({
+        where: { id: request.params.id, reporterId: session.user.id },
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          category: true,
+          eventDate: true,
+          expiresAt: true,
+          placeStation: {
+            select: { name: true, city: { select: { name: true } } },
+          },
+          lostMatches: {
+            where: { status: "SUGGESTED" },
+            orderBy: { score: "desc" },
+            take: 5,
+            select: {
+              id: true,
+              score: true,
+              scoreBreakdown: true,
+              found: {
+                select: {
+                  id: true,
+                  title: true,
+                  category: true,
+                  eventDate: true,
+                  placeStation: { select: { name: true, city: { select: { name: true } } } },
+                },
+              },
+            },
+          },
+          foundMatches: {
+            where: { status: "SUGGESTED" },
+            orderBy: { score: "desc" },
+            take: 5,
+            select: {
+              id: true,
+              score: true,
+              scoreBreakdown: true,
+              lost: {
+                select: {
+                  id: true,
+                  title: true,
+                  category: true,
+                  eventDate: true,
+                  placeStation: { select: { name: true, city: { select: { name: true } } } },
+                },
+              },
+            },
+          },
+        },
+      });
+      if (!report) {
+        response.status(404).json({
+          error: { code: "NOT_FOUND", message: "Report matches were not found." },
+        });
+        return;
+      }
+
+      const matches = report.type === "LOST" ? report.lostMatches : report.foundMatches;
+      response.json({
+        report: {
+          id: report.id,
+          title: report.title,
+          category: report.category,
+          eventDate: report.eventDate.toISOString().slice(0, 10),
+          expiresAt: report.expiresAt.toISOString(),
+          place: { station: report.placeStation.name, city: report.placeStation.city.name },
+        },
+        matches: matches.map((match) => {
+          const candidate = "found" in match ? match.found : match.lost;
+          return {
+            id: match.id,
+            score: match.score,
+            scoreBreakdown: match.scoreBreakdown,
+            candidate: {
+              id: candidate.id,
+              title: candidate.title,
+              category: candidate.category,
+              eventDate: candidate.eventDate.toISOString().slice(0, 10),
+              place: {
+                station: candidate.placeStation.name,
+                city: candidate.placeStation.city.name,
+              },
+            },
+          };
+        }),
+      });
+    } catch (error) {
+      console.error("Report matches request failed", {
+        errorName: error instanceof Error ? error.name : "unknown",
+      });
+      response.status(500).json({
+        error: { code: "INTERNAL_ERROR", message: "Report matches are unavailable." },
+      });
+    }
+  });
+
   router.post("/", async (request, response) => {
     response.setHeader("Cache-Control", "no-store");
 
@@ -194,13 +377,6 @@ export function createReportsRouter({
       });
       return;
     }
-    if (!session.user.emailVerified) {
-      response.status(403).json({
-        error: { code: "NOT_VERIFIED", message: "Verify your email to submit a report." },
-      });
-      return;
-    }
-
     const parsedKey = idempotencyKeySchema.safeParse(request.get("Idempotency-Key"));
     if (!parsedKey.success) {
       response.status(400).json({
