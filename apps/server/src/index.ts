@@ -27,19 +27,39 @@ app.use(express.json());
 app.use("/api/places", placesRouter);
 app.use("/api/reports/status", createReportStatusRouter());
 app.use("/api/reports", reportsRouter);
-app.use(
-  "/api/photos",
-  createPhotosRouter(
-    db,
-    createPhotoStorage({
-      accountId: ENV.R2_ACCOUNT_ID,
-      accessKeyId: ENV.R2_ACCESS_KEY_ID,
-      secretAccessKey: ENV.R2_SECRET_ACCESS_KEY,
-      bucketName: ENV.R2_BUCKET_NAME,
-    }),
-    (headers) => auth.api.getSession({ headers }),
-  ),
-);
+const photoConfig = {
+  accountId: ENV.R2_ACCOUNT_ID,
+  accessKeyId: ENV.R2_ACCESS_KEY_ID,
+  secretAccessKey: ENV.R2_SECRET_ACCESS_KEY,
+  bucketName: ENV.R2_BUCKET_NAME,
+};
+if (
+  photoConfig.accountId &&
+  photoConfig.accessKeyId &&
+  photoConfig.secretAccessKey &&
+  photoConfig.bucketName
+) {
+  const configuredPhotoStorage = {
+    accountId: photoConfig.accountId,
+    accessKeyId: photoConfig.accessKeyId,
+    secretAccessKey: photoConfig.secretAccessKey,
+    bucketName: photoConfig.bucketName,
+  };
+  app.use(
+    "/api/photos",
+    createPhotosRouter(
+      db,
+      createPhotoStorage(configuredPhotoStorage),
+      (headers) => auth.api.getSession({ headers }),
+    ),
+  );
+} else {
+  app.use("/api/photos", (_request, response) => {
+    response.status(503).json({
+      error: { code: "PHOTO_STORAGE_UNAVAILABLE", message: "Photo uploads are unavailable." },
+    });
+  });
+}
 
 app.get("/", (_req, res) => {
   res.status(200).send("OK");

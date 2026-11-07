@@ -7,3 +7,5 @@ export {
   reportDetailsSchema,
   verificationQuestionSchema,
 } from "./report-validation";
+export * from "./matching";
+export * from "./transport-catalog";
