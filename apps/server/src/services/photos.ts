@@ -152,7 +152,6 @@ export function createPhotoStorage(config: PhotoStorageConfig) {
 
 export type PhotoStorage = ReturnType<typeof createPhotoStorage>;
 
-import { ENV } from "../env.server";
 
 /**
  * Storage built straight from env, for routers that need to sign read URLs
@@ -160,16 +159,16 @@ import { ENV } from "../env.server";
  * storage is not configured.
  */
 export function createEnvPhotoStorage(): PhotoStorage | null {
-  return ENV.S3_ENDPOINT &&
-    ENV.S3_ACCESS_KEY_ID &&
-    ENV.S3_SECRET_ACCESS_KEY &&
-    ENV.S3_BUCKET_NAME
+  return process.env.S3_ENDPOINT &&
+    process.env.S3_ACCESS_KEY_ID &&
+    process.env.S3_SECRET_ACCESS_KEY &&
+    process.env.S3_BUCKET_NAME
     ? createPhotoStorage({
-        endpoint: ENV.S3_ENDPOINT,
-        region: ENV.S3_REGION || "auto",
-        accessKeyId: ENV.S3_ACCESS_KEY_ID,
-        secretAccessKey: ENV.S3_SECRET_ACCESS_KEY,
-        bucketName: ENV.S3_BUCKET_NAME,
+        endpoint: process.env.S3_ENDPOINT,
+        region: process.env.S3_REGION || "auto",
+        accessKeyId: process.env.S3_ACCESS_KEY_ID,
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+        bucketName: process.env.S3_BUCKET_NAME,
       })
     : null;
 }

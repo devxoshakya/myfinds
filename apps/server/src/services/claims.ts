@@ -8,7 +8,6 @@ import {
 } from "node:crypto";
 import type { Database } from "@myfinds/db";
 
-import { ENV } from "../env.server";
 
 export class MatchNotFoundError extends Error {
   constructor() {
@@ -57,7 +56,7 @@ const HANDOVER_CODE_TTL_MS = 48 * 60 * 60 * 1000;
 
 // AES-256-GCM key derived from the auth secret: one env var instead of a
 // dedicated HANDOVER_CODE_KEY, and the plaintext code is never stored (S1).
-const codeKey = createHash("sha256").update(ENV.BETTER_AUTH_SECRET).digest();
+const codeKey = createHash("sha256").update(process.env.BETTER_AUTH_SECRET!).digest();
 
 function encryptCode(code: string): string {
   const iv = randomBytes(12);

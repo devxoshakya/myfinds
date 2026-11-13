@@ -3,14 +3,12 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "build": "tsdown",
     "check-types": "tsc --noEmit",
     "compile": "bun build --compile --no-compile-autoload-dotenv --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "dev": "bun run --hot src/index.ts",
     "db:generate": "cd ../../packages/db && bun run db:generate",
-    "start": "bun run dist/index.mjs",
-    "env:generate": "varlock codegen",
-    "auth:generate": "varlock run -- bun x auth@latest generate --config src/services.ts --output ../../packages/db/prisma/schema/auth.prisma --yes",
+    "start": "bun run src/index.ts",
+    "auth:generate": "bun x auth@latest generate --config src/services.ts --output ../../packages/db/prisma/schema/auth.prisma --yes",
     "staff:create": "bun run scripts/create-staff.ts"
   },
   "dependencies": {
@@ -22,7 +20,6 @@
     "better-auth": "catalog:",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "varlock": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -30,7 +27,6 @@
     "@types/bun": "catalog:",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "tsdown": "^0.23.0",
     "typescript": "catalog:"
   }
 }

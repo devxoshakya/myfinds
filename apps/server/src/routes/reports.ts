@@ -5,7 +5,6 @@ import type { Database } from "@myfinds/db";
 import { z } from "zod";
 
 import { auth, db } from "../services";
-import { ENV } from "../env.server";
 import { consumeReportIpLimit } from "../rate-limit";
 import {
   createReport,
@@ -537,5 +536,5 @@ export function createReportsRouter({
 export const reportsRouter = createReportsRouter({
   database: db,
   getSession: (headers) => auth.api.getSession({ headers }),
-  idempotencySecret: ENV.BETTER_AUTH_SECRET,
+  idempotencySecret: process.env.BETTER_AUTH_SECRET!,
 });

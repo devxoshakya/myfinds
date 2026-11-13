@@ -2,7 +2,7 @@ import { toNodeHandler } from "better-auth/node";
 import cors from "cors";
 import express from "express";
 
-import { ENV } from "./env.server";
+
 import { placesRouter } from "./routes/places";
 import { claimsRouter } from "./routes/claims";
 import { createPhotosRouter } from "./routes/photos";
@@ -19,13 +19,13 @@ app.set("trust proxy", true);
 app.use(
   cors({
     origin: (requestOrigin, callback) => {
-      if (!requestOrigin || requestOrigin === ENV.CORS_ORIGIN) {
+      if (!requestOrigin || requestOrigin === process.env.CORS_ORIGIN) {
         callback(null, true);
         return;
       }
       console.warn("CORS origin rejected", {
         origin: requestOrigin,
-        allowedOrigin: ENV.CORS_ORIGIN,
+        allowedOrigin: process.env.CORS_ORIGIN,
       });
       callback(null, false);
     },
@@ -60,3 +60,7 @@ if (photoStorage) {
 app.get("/", (_req, res) => {
   res.status(200).send("OK");
 });
+
+// Vercel zero-config Express entry: the framework builds this file and
+// wraps the default export as the handler for every route.
+export default app;
