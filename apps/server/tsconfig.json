@@ -9,8 +9,10 @@
   "compilerOptions": {
     "target": "ES2022",
     "verbatimModuleSyntax": false,
-    "lib": ["ESNext"],
-    "module": "preserve",
+    "lib": [
+      "ESNext"
+    ],
+    "module": "commonjs",
     "sourceMap": true,
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
@@ -21,11 +23,19 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "skipLibCheck": true,
-    "types": ["bun"],
+    "types": [
+      "bun"
+    ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ]
     }
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

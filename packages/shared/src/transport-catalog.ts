@@ -1,3 +1,5 @@
+import { DMRC_METRO_STATIONS } from "./dmrc-stations";
+
 export type TransportSource = "DMRC" | "INDIAN_RAILWAYS" | "DTC" | "ISBT";
 export type TransportPlaceType = "METRO" | "RAILWAY" | "BUS_STOP";
 
@@ -45,4 +47,3 @@ export const DELHI_NCR_TRANSPORT_PLACES: readonly TransportPlace[] = [
   { source: "DTC", placeType: "BUS_STOP", state: "Haryana", city: "Gurugram", name: "Gurugram Bus Stand" },
   { source: "DTC", placeType: "BUS_STOP", state: "Uttar Pradesh", city: "Noida", name: "Noida Bus Station" },
 ];
-import { DMRC_METRO_STATIONS } from "./dmrc-stations";

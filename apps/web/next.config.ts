@@ -15,6 +15,13 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   typedRoutes: true,
   reactCompiler: true,
+  turbopack: {
+    resolveAlias: {
+      "@myfinds/shared": "../../packages/shared/src/index.ts",
+      "@myfinds/db": "../../packages/db/src/index.ts",
+      "@myfinds/auth": "../../packages/auth/src/index.ts",
+    },
+  },
   async headers() {
     return [
       { source: "/(.*)", headers: securityHeaders },

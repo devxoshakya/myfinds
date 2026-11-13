@@ -2,8 +2,16 @@
   "name": "@myfinds/db",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./*": "./src/*.ts"
+    ".": {
+      "bun": "./src/index.ts",
+      "types": "./src/index.ts",
+      "default": "./src/index.js"
+    },
+    "./*": {
+      "bun": "./src/*.ts",
+      "types": "./src/*.ts",
+      "default": "./src/*.js"
+    }
   },
   "scripts": {
     "check-types": "tsc --noEmit",

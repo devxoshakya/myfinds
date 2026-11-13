@@ -56,3 +56,6 @@ coverage
 .cache
 tmp
 temp
+packages/*/src/**/*.js
+packages/*/prisma.config.js
+packages/*/prisma/seed.js

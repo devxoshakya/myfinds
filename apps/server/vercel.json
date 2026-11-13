@@ -1,4 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "bun run db:generate"
+  "buildCommand": "[ -f .env ] && set -a && . ./.env && set +a; bun run db:generate && node scripts/materialize-deps.mjs"
 }

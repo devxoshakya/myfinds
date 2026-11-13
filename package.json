@@ -41,7 +41,8 @@
     "docker:logs": "docker compose logs -f",
     "env:generate": "varlock codegen --path ./apps/web/",
     "postinstall": "varlock codegen --path ./apps/web/",
-    "auth:generate": "cd apps/server && bun run auth:generate"
+    "auth:generate": "cd apps/server && bun run auth:generate",
+    "build:packages": "cd packages/db && bun x tsc -p tsconfig.json --noEmit false && cd ../auth && bun x tsc -p tsconfig.json --noEmit false && cd ../shared && bun x tsc -p tsconfig.json --noEmit false"
   },
   "dependencies": {
     "zod": "catalog:"
