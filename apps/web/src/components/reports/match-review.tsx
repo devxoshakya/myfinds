@@ -333,7 +333,10 @@ export function MatchReview({ report, matches }: { report: PreviewReport; matche
         key={active.id}
         open={claimOpen}
         onClose={() => setClaimOpen(false)}
+        matchId="preview"
         questions={found.questions ?? []}
+        attemptsUsed={0}
+        onClaimed={() => undefined}
       />
     </>
   );

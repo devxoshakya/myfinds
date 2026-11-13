@@ -1,0 +1,135 @@
+# CI + CD pipeline for the myfinds monorepo.
+#
+# 1. On every push/PR: install, type-check and test both apps.
+# 2. On pushes to main: build and deploy the Express API (`myfinds-server`)
+#    and the Next.js web app (`myfinds-web`) to Vercel using prebuilt deploys.
+#
+# Required GitHub repo secrets (Settings → Secrets and variables → Actions):
+#   VERCEL_TOKEN              — Vercel personal token with deploy scope
+#   VERCEL_ORG_ID             — Vercel team/org id (from project .vercel/project.json)
+#   VERCEL_PROJECT_ID_SERVER  — project id of the myfinds-server Vercel project
+#   VERCEL_PROJECT_ID_WEB     — project id of the myfinds-web Vercel project
+#   DATABASE_URL / DIRECT_URL — Supabase Postgres URLs (varlock + Prisma validation)
+#   BETTER_AUTH_SECRET        — any 32+ char value (CI-only; prod uses its own in Vercel)
+#
+# The Vercel projects must exist first and have their environment variables
+# configured (see docs/DEPLOYMENT.md).
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: 1.4.2
+  # varlock validates required envs whenever prisma/tests touch the server
+  # schema, so CI must satisfy them. URLs are public values; secrets are in
+  # the repo's Actions secrets (BETTER_AUTH_SECRET here is CI-only).
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  DIRECT_URL: ${{ secrets.DIRECT_URL }}
+  BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+  BETTER_AUTH_URL: https://myfinds-server.vercel.app
+  CORS_ORIGIN: https://myfinds-web.vercel.app
+
+jobs:
+  ci:
+    name: Type-check & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Prisma client output (packages/db/prisma/generated) is not committed.
+      - name: Generate Prisma client
+        run: bun run db:generate
+
+      - name: Type-check
+        run: bun run check-types
+
+      - name: Test web (vitest)
+        run: bun run test
+        working-directory: apps/web
+
+      - name: Test server (bun test)
+        run: bun test
+        working-directory: apps/server
+
+  deploy-server:
+    name: Deploy server → Vercel
+    needs: ci
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_SERVER }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Pull Vercel environment
+        run: npx vercel@latest pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/server
+
+      - name: Build
+        run: npx vercel@latest build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/server
+
+      - name: Deploy
+        run: npx vercel@latest deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/server
+
+  deploy-web:
+    name: Deploy web → Vercel
+    needs: ci
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Pull Vercel environment
+        run: npx vercel@latest pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
+
+      - name: Build
+        run: npx vercel@latest build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web
+
+      - name: Deploy
+        run: npx vercel@latest deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: apps/web

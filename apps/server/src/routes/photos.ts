@@ -49,6 +49,7 @@ export function createPhotosRouter(
       await assertReportPhotoAccess(database, parsed.data.reportId, session.user.id);
       response.status(201).json(await storage.createUploadUrl(parsed.data));
     } catch (error) {
+      if (response.headersSent) return;
       if (error instanceof PhotoNotFoundError || error instanceof InvalidPhotoError) {
         response.status(422).json({ error: { code: "VALIDATION_FAILED", message: error.message } });
         return;
@@ -91,6 +92,7 @@ export function createPhotosRouter(
       });
       response.status(201).json({ photo });
     } catch (error) {
+      if (response.headersSent) return;
       if (error instanceof PhotoNotFoundError || error instanceof InvalidPhotoError) {
         response.status(422).json({ error: { code: "VALIDATION_FAILED", message: error.message } });
         return;
@@ -115,6 +117,7 @@ export function createPhotosRouter(
       await assertReportPhotoAccess(database, photo.reportId, session.user.id);
       response.json({ url: await storage.createReadUrl(photo.r2Key), expiresIn: 300 });
     } catch (error) {
+      if (response.headersSent) return;
       if (error instanceof PhotoNotFoundError) {
         response.status(404).json({ error: { code: "NOT_FOUND", message: "Photo not found." } });
         return;

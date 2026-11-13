@@ -17,7 +17,7 @@ import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 
 type UserMenuProps = {
-  user: { name: string; email: string };
+  user: { name: string; email: string; role?: string };
 };
 
 export default function UserMenu({ user }: UserMenuProps) {
@@ -47,6 +47,11 @@ export default function UserMenu({ user }: UserMenuProps) {
           <DropdownMenuItem render={<Link href="/reports" />} className="py-2.5 text-sm">
             My Reports
           </DropdownMenuItem>
+          {(user.role === "STATION_STAFF" || user.role === "ADMIN") && (
+            <DropdownMenuItem render={<Link href="/staff" />} className="py-2.5 text-sm">
+              Staff console
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             variant="destructive"
             className="py-2.5 text-sm"

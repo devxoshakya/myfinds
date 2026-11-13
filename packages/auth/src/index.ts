@@ -43,3 +43,6 @@ export function createAuth(
 }
 
 export type Session = ReturnType<typeof createAuth>["$Infer"]["Session"];
+
+/** Type-only alias for better-auth client type inference (inferAdditionalFields). */
+export type Auth = ReturnType<typeof createAuth>;

@@ -17,7 +17,9 @@ generator client {
   provider = "prisma-client"
   output = "../generated"
   moduleFormat = "esm"
-  runtime = "bun"
+  // "node" so the generated client also runs on Vercel's Node serverless
+  // runtime; Bun runs Node-style output fine, so local dev is unaffected.
+  runtime = "nodejs"
 }
 
 datasource db {

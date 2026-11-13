@@ -49,11 +49,39 @@ const reportHistorySchema = z.object({
   date: z.string().datetime(),
 });
 
+const claimDecisionSchema = z.enum(["PENDING", "APPROVED", "REJECTED"]);
+
+const reportClaimSchema = z.object({
+  attemptNo: z.number().int(),
+  attemptsUsed: z.number().int(),
+  decision: claimDecisionSchema,
+  handedOverAt: z.string().nullable(),
+  handoverExpiresAt: z.string().nullable(),
+  handoverStation: z.string().nullable(),
+  handoverCounterHours: z.string().nullable(),
+  handoverCode: z.string().nullable(),
+});
+
+const custodianClaimSchema = z.object({
+  id: z.string(),
+  attemptNo: z.number().int(),
+  decision: claimDecisionSchema,
+  decidedAt: z.string().nullable(),
+  handedOverAt: z.string().nullable(),
+  answers: z.array(z.string()),
+});
+
 const reportDetailSchema = z.object({
   report: myReportSchema.extend({
     description: z.string().nullable(),
     color: z.string().nullable(),
     brand: z.string().nullable(),
+    claim: reportClaimSchema.nullish(),
+    custodianClaims: z.array(custodianClaimSchema).nullish(),
+    custodianQuestions: z
+      .array(z.object({ question: z.string(), expectedAnswer: z.string() }))
+      .nullish(),
+    photos: z.array(z.object({ url: z.string() })).nullish(),
     history: z.array(reportHistorySchema),
   }),
 });
@@ -61,6 +89,7 @@ const reportDetailSchema = z.object({
 const reportMatchesResponseSchema = z.object({
   report: z.object({
     id: z.string(),
+    type: z.enum(["LOST", "FOUND"]),
     title: z.string(),
     category: z.enum(reportCategories),
     eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -75,13 +104,21 @@ const reportMatchesResponseSchema = z.object({
       candidate: z.object({
         id: z.string(),
         title: z.string(),
+        description: z.string().nullable(),
+        brand: z.string().nullable(),
+        color: z.string().nullable(),
         category: z.enum(reportCategories),
         eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        questions: z.array(z.string()),
+        photos: z.array(z.object({ url: z.string() })),
         place: z.object({ station: z.string(), city: z.string() }),
       }),
+      status: z.string(),
+      attemptsUsed: z.number().int(),
     }),
   ),
 });
+
 
 const createReportResponseSchema = z.object({
   report: z.object({
@@ -100,6 +137,52 @@ const errorResponseSchema = z.object({
   }),
 });
 
+const staffQueueReportSchema = z.object({
+  id: z.string(),
+  number: z.string(),
+  type: z.enum(["LOST", "FOUND"]),
+  title: z.string(),
+  category: z.enum(reportCategories),
+  status: z.enum(reportStatuses),
+  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  place: z.object({ station: z.string(), city: z.string() }),
+});
+
+const staffQueueResponseSchema = z.object({ reports: z.array(staffQueueReportSchema) });
+
+const confirmReceiptResponseSchema = z.object({
+  report: z.object({
+    reportId: z.string(),
+    status: z.enum(reportStatuses),
+  }),
+});
+
+const staffClaimSchema = z.object({
+  id: z.string(),
+  attemptNo: z.number().int(),
+  decision: claimDecisionSchema,
+  handoverExpiresAt: z.string().nullable(),
+  answers: z.array(z.string()),
+  questions: z.array(z.object({ question: z.string(), expectedAnswer: z.string() })),
+  report: z.object({
+    id: z.string(),
+    number: z.string(),
+    title: z.string(),
+    station: z.string().nullable(),
+    photos: z.array(z.object({ url: z.string() })),
+  }),
+});
+
+const staffClaimsResponseSchema = z.object({ claims: z.array(staffClaimSchema) });
+
+const claimActionResponseSchema = z.object({
+  claim: z.object({
+    decision: claimDecisionSchema.optional(),
+    handoverExpiresAt: z.string().nullable().optional(),
+    handedOverAt: z.string().optional(),
+  }),
+});
+
 type CreateReportInput = z.infer<typeof createReportSchema>;
 type CreateReportResponse = z.infer<typeof createReportResponseSchema>;
 export type PlaceDirectoryEntry = z.infer<typeof placeDirectoryEntrySchema>;
@@ -107,6 +190,7 @@ export type PrivateReportStatus = z.infer<typeof privateReportStatusSchema>;
 export type MyReport = z.infer<typeof myReportSchema>;
 export type ReportDetail = z.infer<typeof reportDetailSchema>["report"];
 export type ReportMatch = z.infer<typeof reportMatchesResponseSchema>;
+export type StaffQueueReport = z.infer<typeof staffQueueReportSchema>;
 
 export class ReportApiError extends Error {
   constructor(
@@ -348,4 +432,151 @@ export async function copyReportCode(
   clipboard: Pick<Clipboard, "writeText"> = navigator.clipboard,
 ) {
   await clipboard.writeText(code);
+}
+
+export async function getStaffQueue(): Promise<StaffQueueReport[]> {
+  const response = await fetch(getApiUrl("/api/staff/reports"), {
+    cache: "no-store",
+    credentials: "include",
+  });
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new ReportApiError(
+      "The staff service returned an invalid response.",
+      "INVALID_RESPONSE",
+      response.status,
+    );
+  }
+
+  if (!response.ok) {
+    const parsedError = errorResponseSchema.safeParse(body);
+    throw new ReportApiError(
+      parsedError.success ? parsedError.data.error.message : "The staff queue is unavailable.",
+      parsedError.success ? parsedError.data.error.code : "INVALID_RESPONSE",
+      response.status,
+    );
+  }
+
+  const parsedQueue = staffQueueResponseSchema.safeParse(body);
+  if (!parsedQueue.success) {
+    throw new ReportApiError(
+      "The staff service returned an invalid response.",
+      "INVALID_RESPONSE",
+      response.status,
+    );
+  }
+  return parsedQueue.data.reports;
+}
+
+export async function confirmReportReceipt(reportId: string): Promise<void> {
+  const response = await fetch(getApiUrl(`/api/staff/reports/${reportId}/confirm-receipt`), {
+    method: "POST",
+    cache: "no-store",
+    credentials: "include",
+  });
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new ReportApiError(
+      "The staff service returned an invalid response.",
+      "INVALID_RESPONSE",
+      response.status,
+    );
+  }
+
+  if (!response.ok) {
+    const parsedError = errorResponseSchema.safeParse(body);
+    throw new ReportApiError(
+      parsedError.success ? parsedError.data.error.message : "Receipt confirmation failed.",
+      parsedError.success ? parsedError.data.error.code : "INVALID_RESPONSE",
+      response.status,
+    );
+  }
+
+  const parsedConfirmation = confirmReceiptResponseSchema.safeParse(body);
+  if (!parsedConfirmation.success) {
+    throw new ReportApiError(
+      "The staff service returned an invalid response.",
+      "INVALID_RESPONSE",
+      response.status,
+    );
+  }
+}
+
+async function postClaimAction(path: string, body: unknown, fallbackError: string): Promise<void> {
+  const response = await fetch(getApiUrl(path), {
+    method: "POST",
+    cache: "no-store",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  let parsedBody: unknown;
+  try {
+    parsedBody = await response.json();
+  } catch {
+    throw new ReportApiError("The claim service returned an invalid response.", "INVALID_RESPONSE", response.status);
+  }
+
+  if (!response.ok) {
+    const parsedError = errorResponseSchema.safeParse(parsedBody);
+    throw new ReportApiError(
+      parsedError.success ? parsedError.data.error.message : fallbackError,
+      parsedError.success ? parsedError.data.error.code : "INVALID_RESPONSE",
+      response.status,
+    );
+  }
+
+  if (!claimActionResponseSchema.safeParse(parsedBody).success) {
+    throw new ReportApiError("The claim service returned an invalid response.", "INVALID_RESPONSE", response.status);
+  }
+}
+
+export async function submitReportClaim(matchId: string, answers: string[]): Promise<void> {
+  await postClaimAction("/api/claims", { matchId, answers }, "The claim could not be sent.");
+}
+
+export async function decideReportClaim(claimId: string, decision: "APPROVED" | "REJECTED"): Promise<void> {
+  await postClaimAction(`/api/claims/${claimId}/decision`, { decision }, "The claim decision failed.");
+}
+
+export async function confirmReportHandover(claimId: string, code: string): Promise<void> {
+  await postClaimAction(`/api/claims/${claimId}/handover`, { code }, "The handover code was rejected.");
+}
+
+export type StaffClaim = z.infer<typeof staffClaimSchema>;
+
+export async function getStaffClaims(): Promise<StaffClaim[]> {
+  const response = await fetch(getApiUrl("/api/staff/claims"), {
+    cache: "no-store",
+    credentials: "include",
+  });
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new ReportApiError("The staff service returned an invalid response.", "INVALID_RESPONSE", response.status);
+  }
+
+  if (!response.ok) {
+    const parsedError = errorResponseSchema.safeParse(body);
+    throw new ReportApiError(
+      parsedError.success ? parsedError.data.error.message : "The staff claims list is unavailable.",
+      parsedError.success ? parsedError.data.error.code : "INVALID_RESPONSE",
+      response.status,
+    );
+  }
+
+  const parsed = staffClaimsResponseSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new ReportApiError("The staff service returned an invalid response.", "INVALID_RESPONSE", response.status);
+  }
+  return parsed.data.claims;
 }

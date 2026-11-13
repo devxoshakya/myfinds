@@ -7,9 +7,11 @@
     "check-types": "tsc --noEmit",
     "compile": "bun build --compile --no-compile-autoload-dotenv --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "dev": "bun run --hot src/index.ts",
+    "db:generate": "cd ../../packages/db && bun run db:generate",
     "start": "bun run dist/index.mjs",
     "env:generate": "varlock codegen",
-    "auth:generate": "varlock run -- bun x auth@latest generate --config src/services.ts --output ../../packages/db/prisma/schema/auth.prisma --yes"
+    "auth:generate": "varlock run -- bun x auth@latest generate --config src/services.ts --output ../../packages/db/prisma/schema/auth.prisma --yes",
+    "staff:create": "bun run scripts/create-staff.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1163.0",

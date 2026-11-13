@@ -37,7 +37,8 @@ export class PhotoNotFoundError extends Error {
 }
 
 type PhotoStorageConfig = {
-  accountId: string;
+  endpoint: string;
+  region: string;
   accessKeyId: string;
   secretAccessKey: string;
   bucketName: string;
@@ -45,8 +46,11 @@ type PhotoStorageConfig = {
 
 function createStorageClient(config: PhotoStorageConfig) {
   return new S3Client({
-    region: "auto",
-    endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
+    region: config.region,
+    endpoint: config.endpoint,
+    // Supabase (and most S3-compatible stores) only serve path-style URLs;
+    // virtual-hosted-style addressing fails TLS/DNS on their hosts.
+    forcePathStyle: true,
     credentials: {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
@@ -147,6 +151,28 @@ export function createPhotoStorage(config: PhotoStorageConfig) {
 }
 
 export type PhotoStorage = ReturnType<typeof createPhotoStorage>;
+
+import { ENV } from "../env.server";
+
+/**
+ * Storage built straight from env, for routers that need to sign read URLs
+ * (photo display) without plumbing a client through app.ts. Null when photo
+ * storage is not configured.
+ */
+export function createEnvPhotoStorage(): PhotoStorage | null {
+  return ENV.S3_ENDPOINT &&
+    ENV.S3_ACCESS_KEY_ID &&
+    ENV.S3_SECRET_ACCESS_KEY &&
+    ENV.S3_BUCKET_NAME
+    ? createPhotoStorage({
+        endpoint: ENV.S3_ENDPOINT,
+        region: ENV.S3_REGION || "auto",
+        accessKeyId: ENV.S3_ACCESS_KEY_ID,
+        secretAccessKey: ENV.S3_SECRET_ACCESS_KEY,
+        bucketName: ENV.S3_BUCKET_NAME,
+      })
+    : null;
+}
 
 export async function assertReportPhotoAccess(
   database: Database,

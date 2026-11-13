@@ -5,6 +5,9 @@ model User {
   image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  // Better Auth core field; the adapter writes it on every credential signup.
+  // Email verification is not enabled, so it stays false unless we turn it on.
+  emailVerified Boolean  @default(false)
   // App extension: role is server-set only; default USER (docs/model.md §2.2).
   role          String    @default("USER")
   sessions      Session[]

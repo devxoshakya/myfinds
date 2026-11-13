@@ -12,13 +12,19 @@ import UserMenu from "./user-menu";
 const links = [
   { href: "/#how-it-works", label: "How it works" },
   { href: "/reports", label: "My Reports", signedInOnly: true },
+  { href: "/staff", label: "Staff console", staffOnly: true },
 ] as const;
 
 export default function Header() {
   const { data: session, isPending } = authClient.useSession();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const visibleLinks = links.filter((link) => !("signedInOnly" in link) || session);
+  const role = session?.user?.role;
+  const visibleLinks = links.filter(
+    (link) =>
+      (!("signedInOnly" in link) || session) &&
+      (!("staffOnly" in link) || (role === "STATION_STAFF" || role === "ADMIN")),
+  );
 
   return (
     <header className="border-b border-border bg-background">
