@@ -123,12 +123,12 @@ describe("handover code", () => {
 });
 
 describe("decide claim", () => {
-  const actor = { userId: "user-2", role: "USER", stationIds: [] as string[] };
+  const actor = { userId: "user-2", role: "USER", stationIds: ["station-9"] as string[] };
 
   it("rejects a decision from a non-custodian", async () => {
     const { database } = fakeClaimsDatabase(ownedMatch);
     await expect(
-      decideClaim(database, "claim-1", { decision: "APPROVED", ...actor, userId: "stranger" }),
+      decideClaim(database, "claim-1", { decision: "APPROVED", ...actor, userId: "stranger", stationIds: [] }),
     ).rejects.toBeInstanceOf(ClaimNotAllowedError);
   });
 
@@ -178,7 +178,7 @@ describe("confirm handover", () => {
       },
     } as unknown as Database;
     await expect(
-      confirmHandover(database, "claim-1", { code: "000000", userId: "user-2", role: "USER", stationIds: [] }),
+      confirmHandover(database, "claim-1", { code: "000000", userId: "user-2", role: "USER", stationIds: ["station-9"] }),
     ).rejects.toBeInstanceOf(InvalidHandoverCodeError);
   });
 });
