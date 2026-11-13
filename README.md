@@ -1,154 +1,135 @@
-# myfinds
+# MyFinds
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Next.js, Express, and more.
+Lost & found for the Delhi-NCR transport network. Commuters file lost-item reports, a rule-based engine matches them against found reports and the checked-in transport directory (DMRC, Indian Railways, DTC, ISBT), and station staff run the claim → handover flow with 6-digit one-time codes.
 
-## Features
+Live: server at `myfinds-server.vercel.app` (web deploy pending)
+Demo credentials: see [`docs/DEMO_CREDENTIALS.md`](docs/DEMO_CREDENTIALS.md)
 
-- **TypeScript** - For type safety and improved developer experience
-- **Next.js** - Full-stack React framework
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **Shared UI package** - shadcn/ui primitives live in `packages/ui`
-- **Express** - Fast, unopinionated web framework
-- **Bun** - Runtime environment
-- **Prisma** - TypeScript-first ORM
-- **PostgreSQL** - Database engine
-- **Authentication** - Better-Auth
-- **Turborepo** - Optimized monorepo build system
-- **PWA** - Progressive Web App support
+## Stack
 
-## Getting Started
+- **Next.js** (App Router) + Tailwind + shadcn/ui + Serwist PWA — `apps/web`
+- **Express** on Bun — `apps/server`, deployed to Vercel with zero config (framework auto-detected)
+- **Prisma** + PostgreSQL (driver adapters, `pg_trgm` search) — `packages/db`
+- **Better Auth** (email/password) — `packages/auth`
+- **Shared validation & matching rules** — `packages/shared`
+- **Cloudflare R2** for private photo storage
+- **Turborepo** + bun workspaces
 
-First, install the dependencies:
+## Structure
+
+```
+apps/web        Next.js client (port 3001)
+apps/server     Express API (port 3000, Vercel function)
+packages/db     Prisma schema, generated client, seed
+packages/auth   Better Auth config + adapters
+packages/shared Zod schemas, matching rules, transport catalog
+packages/ui     shadcn/ui primitives
+```
+
+## Getting started
 
 ```bash
 bun install
+bun run db:generate          # prisma generate (after schema changes too)
+bun run db:push              # apply schema
+bun run db:seed              # Delhi seed data
+bun run dev                  # turbo dev (web + server)
 ```
 
-## Database Setup
+Env lives in `apps/server/.env` (server) and web/db via varlock-encrypted env files. Vars: `DATABASE_URL`, `DIRECT_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CORS_ORIGIN`, R2 keys.
 
-Generate the Prisma client before development, typechecking, or building, including in CI and deployment builds. Run this again after changing the Prisma schema:
+## Tests & checks
 
 ```bash
-bun run db:generate
+cd apps/server && bun test   # 38 tests
+cd apps/web && bun test      # vitest
+bun run check-types          # turbo, whole monorepo
 ```
 
-This project uses PostgreSQL with Prisma.
+Run tests per package — running `bun test` at the root gives false failures.
 
-1. Make sure you have a PostgreSQL database set up.
-2. Update your `apps/server/.env` file with your PostgreSQL connection details.
+## Deploying
 
-3. Apply the schema to your database:
+Both projects deploy manually to Vercel (CI/CD was removed on purpose):
 
 ```bash
-bun run db:push
+cd apps/server
+npx vercel@latest build --prod     # local prebuilt build
+vercel deploy --prebuilt           # preview, then promote when green
 ```
 
-Then, run the development server:
+- The server's `vercel.json` buildCommand sources `apps/server/.env` when present (for `db:generate`) and runs `scripts/materialize-deps.mjs`, which makes the workspace packages and better-auth loadable inside Vercel's function runtime.
+- On Vercel (not local) build env comes from Project Settings — no `.env` needed there.
+- After a `vercel build`, run `bun install` once to restore the `@myfinds` symlinks for local dev.
+- Web needs `bun run db:generate && bun run build` as its build command.
 
-```bash
-bun run dev
-```
+Full guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) · Architecture & rules: [`docs/Plan.md`](docs/Plan.md) · [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
-The API is running at [http://localhost:3000](http://localhost:3000).
+## Day-wise progress
 
-## UI Customization
+### Nov 03–05 — foundation & reports
+- [x] Repo scaffolded (Better-T-Stack), monorepo + auth + DB wired
+- [x] Shared report validation package (Zod schemas client + server)
+- [x] Report submission + status integration end-to-end
 
-React web apps in this stack share shadcn/ui primitives through `packages/ui`.
+### Nov 06 — photos, seed, matching
+- [x] Cloudflare R2 photo uploads (private buckets, presigned)
+- [x] Delhi-NCR seed data + `pg_trgm` search
+- [x] Rule-based report matching engine (weighted: place/text/date/attributes)
+- [x] Transport directory search expanded (DMRC + more operators)
 
-- Change design tokens and global styles in `packages/ui/src/styles/globals.css`
-- Update shared primitives in `packages/ui/src/components/*`
-- Adjust shadcn aliases or style config in `packages/ui/components.json` and `apps/web/components.json`
+### Nov 07 — matching flow & frontend review
+- [x] Matching flow complete on frontend
+- [x] Frontend review fixes merged
 
-### Add more shared components
+### Nov 10–13 — matching & frontend polish
+- [x] Matching + frontend review work completed (PR #7)
 
-Run this from the project root to add more primitives to the shared UI package:
+### Nov 13 — staff console, claims & handover
+- [x] Staff console, claim pipeline, handover codes (AES-256-GCM, one-time, constant-time verify)
+- [x] Vercel deploy setup for server + web projects
+- [x] CI/CD pipeline removed (manual deploys)
 
-```bash
-npx shadcn@latest add accordion dialog popover sheet table -c packages/ui
-```
+### Nov 13 — deploy hardening (Vercel)
+- [x] Varlock removed from the server app entirely; env read via `process.env`
+- [x] Zero-config Express on Vercel: no `api/` folder, no rewrites, no custom bundler; `export default app` entry
+- [x] Function emits CommonJS (`module: "commonjs"`) so extensionless relative imports resolve
+- [x] Hoisted bun linker + `materialize-deps.mjs`: workspace packages shipped as compiled CJS copies (packer strips symlinks)
+- [x] Prisma generated client compiled to CJS in the deployed copies
+- [x] better-auth (ESM-only) compiled to CJS and registered under the `require` export condition
+- [x] Mid-file import in `transport-catalog.ts` moved to top (ESM hoisting vs CJS order)
+- [x] Web `turbopack.resolveAlias` restored for `@myfinds/*`
+- [x] Verified end-to-end: function module graph loads under plain Node, 38 server tests + typecheck green, web build green, live server responds (root + sign-in)
 
-Import shared components like this:
+### Nov 16 — staff auth & access
+- [x] Better Auth sign-in for staff
+- [x] Server-side role guards on all `/staff` routes (staff/admin only)
 
-```tsx
-import { Button } from "@myfinds/ui/components/button";
-```
+### Nov 17 — staff queue & verification view
+- [x] `/staff` queue of suggested matches sorted by score
+- [x] Side-by-side match verification revealing hidden details strictly to staff
 
-### Add app-specific blocks
+### Nov 18 — status machine
+- [x] Status transition service (`/api/report-status`, timeline lookup by token)
+- [x] Approve/reject transitions refuse illegal state jumps (e.g. rejection frees the lost report)
 
-If you want to add app-specific blocks instead of shared primitives, run the shadcn CLI from `apps/web`.
+### Nov 19 — owner & staff verification
+- [x] Owner flow after approval: claim a match ("this is mine") with verification questions
+- [x] Staff verification step with required decision
 
-## Environment Configuration
+### Nov 20 — privacy & abuse
+- [x] Leak tests: secret owner details never appear in unauthorized responses
+- [x] Rate limiting (per-IP windows on report submission and status lookups, claim/code attempt limits)
 
-Each app owns its environment schema in `.env.schema`. Varlock generates `src/env.ts` during installation; run `bun run env:generate` after changing a schema. Commit schemas, and keep secrets in ignored env files or your deployment platform.
+### Nov 23 — handover
+- [x] Handover flow: ready-for-handover → one-time 6-digit code (AES-256-GCM encrypted at rest, expiring) → confirm receipt
+- [x] `RETURNED` / `CLOSED` transitions wired
 
-Import the generated `ENV` accessor in application code. Shared database and auth packages receive configuration or initialized clients from the application. See [Varlock's monorepo guide](https://varlock.dev/guides/monorepos/).
+### Nov 26 — launch prep
+- [x] Documentation finalized (ARCHITECTURE, DEPLOYMENT, Plan, PRD, demo credentials)
+- [x] Server deployed to Vercel and verified live (web deploy pending)
 
-Bun's automatic env loading is disabled in `bunfig.toml`; the framework integration or server bootstrap loads Varlock. Node deployments must include Varlock and its dependencies alongside the app schema.
-
-Run standalone Node/Bun tools that use Varlock from the owning app directory so they load that app's schema and env files. `env:generate` only generates TypeScript files; it does not initialize environment values in a subsequent command.
-
-### Cloudflare R2 photos
-
-The server-side photo pipeline uses a private Cloudflare R2 bucket. Configure these variables in
-`apps/server/.env`:
-
-```text
-R2_ACCOUNT_ID=
-R2_ACCESS_KEY_ID=
-R2_SECRET_ACCESS_KEY=
-R2_BUCKET_NAME=
-```
-
-Configure the bucket CORS policy to allow `PUT` from `CORS_ORIGIN` with the `Content-Type` and
-`Content-Length` request headers. Photos are uploaded through short-lived presigned URLs,
-validated with an object `HEAD`, and read through owner-checked five-minute presigned URLs.
-
-## Deployment
-
-### Docker Compose
-
-- Target: server
-- Config: `docker-compose.yml` (app Dockerfiles live in `apps/*/Dockerfile`)
-- Build images: bun run docker:build
-- Start: bun run docker:up
-- Logs: bun run docker:logs
-- Stop: bun run docker:down
-
-Environment variables are read from each app's `.env` file (baked into web builds for public variables) and overridden in `docker-compose.yml` for container networking.
-
-For more details, see the guide on [Deploying with Docker Compose](https://www.better-t-stack.dev/docs/guides/docker).
-
-## Project Structure
-
-```
-myfinds/
-├── apps/
-│   ├── web/         # Frontend application (Next.js)
-│   └── server/      # Backend API (Express)
-├── packages/
-│   ├── ui/          # Shared shadcn/ui components and styles
-│   ├── auth/        # Authentication configuration & logic
-│   └── db/          # Database schema & queries
-```
-
-## Available Scripts
-
-- `bun run dev`: Start all applications in development mode
-- `bun run build`: Build all applications
-- `bun run dev:web`: Start only the web application
-- `bun run dev:server`: Start only the server
-- `bun run check-types`: Check TypeScript types across all apps
-- `bun run db:push`: Push schema changes to database
-- `bun run db:generate`: Generate database client/types
-- `bun run db:migrate`: Run database migrations
-- `bun run db:studio`: Open database studio UI
-- `cd apps/web && bun run generate-pwa-assets`: Generate PWA assets
-- `bun run docker:build`: Build the Docker Compose images
-- `bun run docker:up`: Build and start the Docker Compose stack
-- `bun run docker:logs`: Tail logs from the Docker Compose stack
-- `bun run docker:down`: Stop the Docker Compose stack
-
-## Better Auth Schema Generation
-
-After changing auth plugins or schema options, run `bun run auth:generate` from the project root. The script runs the Better Auth CLI through `varlock run` from the owning app directory, loading the auth instance from `src/services.ts`. Review the schema changes, then use your ORM's migration workflow to apply them.
+### Still open
+- [ ] Nov 24–25: external usability sessions, regression checklist, accessibility pass
+- [ ] Nov 27: teach-backs, fresh-clone demo, post-MVP backlog
+- [ ] Web app deploy to Vercel
