@@ -58,7 +58,7 @@ export function createStaffRouter({ database, getSession }: StaffRouterDependenc
   router.get("/reports", async (request, response) => {
     response.setHeader("Cache-Control", "private, no-store, max-age=0");
     const guard = await requireStaff(request);
-    if (!guard.session) {
+    if ("error" in guard) {
       response.status(guard.error === "UNAUTHENTICATED" ? 401 : 403).json({
         error:
           guard.error === "UNAUTHENTICATED"
@@ -101,7 +101,7 @@ export function createStaffRouter({ database, getSession }: StaffRouterDependenc
   router.get("/claims", async (request, response) => {
     response.setHeader("Cache-Control", "private, no-store, max-age=0");
     const guard = await requireStaff(request);
-    if (!guard.session) {
+    if ("error" in guard) {
       response.status(guard.error === "UNAUTHENTICATED" ? 401 : 403).json({
         error:
           guard.error === "UNAUTHENTICATED"
@@ -130,7 +130,7 @@ export function createStaffRouter({ database, getSession }: StaffRouterDependenc
   router.post("/reports/:id/confirm-receipt", async (request, response) => {
     response.setHeader("Cache-Control", "private, no-store, max-age=0");
     const guard = await requireStaff(request);
-    if (!guard.session) {
+    if ("error" in guard) {
       response.status(guard.error === "UNAUTHENTICATED" ? 401 : 403).json({
         error:
           guard.error === "UNAUTHENTICATED"
