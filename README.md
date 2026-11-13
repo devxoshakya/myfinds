@@ -61,7 +61,6 @@ vercel deploy --prebuilt           # preview, then promote when green
 - The server's `vercel.json` buildCommand sources `apps/server/.env` when present (for `db:generate`) and runs `scripts/materialize-deps.mjs`, which makes the workspace packages and better-auth loadable inside Vercel's function runtime.
 - On Vercel (not local) build env comes from Project Settings — no `.env` needed there.
 - After a `vercel build`, run `bun install` once to restore the `@myfinds` symlinks for local dev.
-- Web needs `bun run db:generate && bun run build` as its build command.
 
 Full guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) · Architecture & rules: [`docs/Plan.md`](docs/Plan.md) · [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 

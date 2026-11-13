@@ -11,6 +11,7 @@
     "env:generate": "varlock codegen"
   },
   "dependencies": {
+    "@myfinds/db": "workspace:*",
     "@myfinds/shared": "workspace:*",
     "@myfinds/ui": "workspace:*",
     "@swc/helpers": "^0.5.23",
