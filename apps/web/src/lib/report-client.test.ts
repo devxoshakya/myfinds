@@ -260,6 +260,7 @@ describe("getMyReports", () => {
           JSON.stringify({
             report: {
               id: "report-id",
+              type: "LOST",
               title: "Leather wallet",
               category: "WALLET",
               eventDate: "2026-11-04",

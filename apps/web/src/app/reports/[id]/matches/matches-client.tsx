@@ -6,7 +6,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { getReportMatches, ReportApiError, type ReportMatch } from "@/lib/report-api";
-import { reportPath } from "@/lib/routes";
+import { ClaimDialog } from "@/components/reports/claim-dialog";
+import { matchesPath, reportPath } from "@/lib/routes";
 
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" }).format(
@@ -17,10 +18,17 @@ export default function MatchesClient({ id }: { id: string }) {
   const [data, setData] = useState<ReportMatch | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loaded, setLoaded] = useState(false);
+  const [claiming, setClaiming] = useState<ReportMatch["matches"][number] | null>(null);
 
   useEffect(() => {
     getReportMatches(id).then(setData).catch(setError).finally(() => setLoaded(true));
   }, [id]);
+
+  // Reload after a claim so match statuses and attempt counters stay honest.
+  const refresh = () => {
+    setClaiming(null);
+    getReportMatches(id).then(setData).catch(() => undefined);
+  };
 
   if (error) {
     const unauthenticated = error instanceof ReportApiError && error.status === 401;
@@ -38,7 +46,7 @@ export default function MatchesClient({ id }: { id: string }) {
         {data.matches.length > 0 ? `${data.matches.length} possible ${data.matches.length === 1 ? "match" : "matches"}` : "No possible matches yet"}
       </h1>
       <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-        Similarity is a suggestion, not proof of ownership. Review the details before starting a claim.
+        Similarity is a suggestion, not proof of ownership. Review the details before a claim is made.
       </p>
       <div className="mt-5 flex items-start gap-2 border border-border bg-surface-muted p-3 text-sm text-muted-foreground">
         <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -65,13 +73,53 @@ export default function MatchesClient({ id }: { id: string }) {
                 <div><dt className="text-muted-foreground">Found date</dt><dd className="font-medium">{formatDate(match.candidate.eventDate)}</dd></div>
                 <div><dt className="text-muted-foreground">Place</dt><dd className="font-medium">{match.candidate.place.station}, {match.candidate.place.city}</dd></div>
               </dl>
-              <Button className="mt-5 h-11" variant="outline" render={<Link href={reportPath(data.report.id)} />} nativeButton={false}>
-                Review report
-              </Button>
+              {match.candidate.photos && match.candidate.photos.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {match.candidate.photos.map((photo, index) => (
+                    <img
+                      key={`${match.id}-photo-${index}`}
+                      src={photo.url}
+                      alt={`Item photo ${index + 1}`}
+                      loading="lazy"
+                      className="size-20 border border-border object-cover"
+                    />
+                  ))}
+                </div>
+              ) : null}
+              {match.candidate.brand || match.candidate.color ? (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {match.candidate.brand ? <>Brand: {match.candidate.brand}. </> : null}
+                  {match.candidate.color ? <>Color: {match.candidate.color}.</> : null}
+                </p>
+              ) : null}
+              {match.candidate.description ? (
+                <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">
+                  {match.candidate.description}
+                </p>
+              ) : null}
+              {data.report.type === "LOST" ? (
+                <ClaimArea match={match} onOpenClaim={() => setClaiming(match)} />
+              ) : (
+                <p className="mt-4 border border-border bg-surface-muted p-3 text-sm leading-6 text-muted-foreground">
+                  This is a lost report that may match your item. Its owner already sees this match on their report
+                  and can claim it. Once a claim is approved, you confirm the handover with their one-time code.
+                </p>
+              )}
             </li>
           ))}
         </ul>
       )}
+
+      {claiming ? (
+        <ClaimDialog
+          open
+          onClose={() => setClaiming(null)}
+          matchId={claiming.id}
+          questions={claiming.candidate.questions}
+          attemptsUsed={claiming.attemptsUsed}
+          onClaimed={refresh}
+        />
+      ) : null}
     </div>
   );
 }
@@ -82,6 +130,43 @@ function State({ title, message, loading = false }: { title: string; message: st
       {loading ? <LoaderCircle className="size-5 animate-spin text-muted-foreground" aria-hidden="true" /> : null}
       <h1 className="mt-3 text-xl font-semibold">{title}</h1>
       <p className="mt-2 text-sm text-muted-foreground">{message}</p>
+    </div>
+  );
+}
+
+const claimStateLabels: Record<string, string> = {
+  CLAIMED: "Claim sent — the custodian is reviewing your answers.",
+  VERIFIED: "Claim approved — your handover code is on the report page.",
+  COMPLETED: "This item was returned to you.",
+};
+
+function ClaimArea({
+  match,
+  onOpenClaim,
+}: {
+  match: ReportMatch["matches"][number];
+  onOpenClaim: () => void;
+}) {
+  const attemptsLeft = 3 - match.attemptsUsed;
+  const open = match.status === "SUGGESTED" || match.status === "REJECTED";
+
+  if (!open) {
+    const label = claimStateLabels[match.status] ?? "This match is closed.";
+    return (
+      <p className="mt-4 border border-border bg-surface-muted p-3 text-sm text-muted-foreground">{label}</p>
+    );
+  }
+
+  return (
+    <div className="mt-5 border-t border-border pt-4">
+      {match.status === "REJECTED" ? (
+        <p className="mb-3 text-sm text-destructive">
+          Your previous claim was rejected. {attemptsLeft} {attemptsLeft === 1 ? "attempt" : "attempts"} left.
+        </p>
+      ) : null}
+      <Button className="h-11" onClick={onOpenClaim}>
+        Claim this item
+      </Button>
     </div>
   );
 }

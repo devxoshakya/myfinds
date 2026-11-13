@@ -59,6 +59,7 @@
         "zod": "catalog:",
       },
       "devDependencies": {
+        "@myfinds/auth": "workspace:*",
         "@myfinds/config": "workspace:*",
         "@tailwindcss/postcss": "catalog:",
         "@testing-library/react": "^16.3.3",

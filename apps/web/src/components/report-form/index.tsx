@@ -334,12 +334,10 @@ export default function ReportForm({ kind }: ReportFormProps) {
     }
     try {
       const created = await submitReport(apiValidation.data, idempotencyKeyRef.current.key);
-      for (const photo of itemPhotos) {
-        await uploadReportPhoto(created.report.id, photo, "ITEM");
-      }
-      if (proofPhoto) {
-        await uploadReportPhoto(created.report.id, proofPhoto, "PROOF");
-      }
+      await Promise.all([
+        ...itemPhotos.map((photo) => uploadReportPhoto(created.report.id, photo, "ITEM")),
+        proofPhoto ? uploadReportPhoto(created.report.id, proofPhoto, "PROOF") : Promise.resolve(),
+      ]);
       setCreatedReport(created);
       requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
     } catch (error) {
