@@ -39,8 +39,8 @@
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
-    "env:generate": "varlock codegen --path ./apps/web/ && varlock codegen --path ./packages/db/",
-    "postinstall": "varlock codegen --path ./apps/web/ && varlock codegen --path ./packages/db/",
+    "env:generate": "varlock codegen --path ./apps/web/",
+    "postinstall": "varlock codegen --path ./apps/web/",
     "auth:generate": "cd apps/server && bun run auth:generate"
   },
   "dependencies": {
