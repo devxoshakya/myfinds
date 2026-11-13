@@ -9,9 +9,11 @@
 #   VERCEL_ORG_ID             — Vercel team/org id (from project .vercel/project.json)
 #   VERCEL_PROJECT_ID_SERVER  — project id of the myfinds-server Vercel project
 #   VERCEL_PROJECT_ID_WEB     — project id of the myfinds-web Vercel project
+#   DATABASE_URL / DIRECT_URL — Supabase Postgres URLs (varlock + Prisma validation)
+#   BETTER_AUTH_SECRET        — any 32+ char value (CI-only; prod uses its own in Vercel)
 #
 # The Vercel projects must exist first and have their environment variables
-# configured in the Vercel dashboard (see docs/DEPLOYMENT.md).
+# configured (see docs/DEPLOYMENT.md).
 
 name: CI/CD
 
@@ -26,6 +28,14 @@ concurrency:
 
 env:
   BUN_VERSION: 1.4.2
+  # varlock validates required envs whenever prisma/tests touch the server
+  # schema, so CI must satisfy them. URLs are public values; secrets are in
+  # the repo's Actions secrets (BETTER_AUTH_SECRET here is CI-only).
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  DIRECT_URL: ${{ secrets.DIRECT_URL }}
+  BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+  BETTER_AUTH_URL: https://myfinds-server.vercel.app
+  CORS_ORIGIN: https://myfinds-web.vercel.app
 
 jobs:
   ci:
