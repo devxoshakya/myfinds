@@ -39,6 +39,8 @@ To ensure security, privacy, and architectural integrity, the following rules ar
 
 ## 📅 Daily Task Schedule (4-Week Plan)
 
+> **Progress (Nov 16):** Running ahead of schedule. Week 1–2 complete. Week 3 Monday's task (staff sign-in + role checks) shipped early, and Tue–Thu (staff queue, claim review, status transitions, handover) are done via the claims pipeline (`/api/staff/*` guards, `ClaimReview`, `MatchStatus` machine). Week 4 Monday (handover codes, `RETURNED`) done. Remaining: leak tests ✅ (`apps/server/src/routes/leak.test.ts`, added Nov 16), abuse-case rate-limit tests (partially covered by `rate-limit.test.ts`), Week 4 Tue–Fri (usability sessions, regression checklist, a11y pass, final docs, staging deploy, backlog).
+
 *Note: Pair programming rotation is assumed. Tasks are listed per day to ensure continuous momentum.*
 
 ### Week 1: Foundation & Data Capture
