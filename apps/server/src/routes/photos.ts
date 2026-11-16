@@ -3,6 +3,8 @@ import type { Session } from "@myfinds/auth";
 import type { Database } from "@myfinds/db";
 import { z } from "zod";
 
+import { describeError } from "../services";
+
 import {
   assertReportPhotoAccess,
   InvalidPhotoError,
@@ -54,7 +56,7 @@ export function createPhotosRouter(
         response.status(422).json({ error: { code: "VALIDATION_FAILED", message: error.message } });
         return;
       }
-      console.error("Photo presign failed", { errorName: error instanceof Error ? error.name : "unknown" });
+      console.error("Photo presign failed", describeError(error));
       response.status(500).json({ error: { code: "INTERNAL_ERROR", message: "Photo upload is unavailable." } });
     }
   });
@@ -97,7 +99,7 @@ export function createPhotosRouter(
         response.status(422).json({ error: { code: "VALIDATION_FAILED", message: error.message } });
         return;
       }
-      console.error("Photo confirmation failed", { errorName: error instanceof Error ? error.name : "unknown" });
+      console.error("Photo confirmation failed", describeError(error));
       response.status(500).json({ error: { code: "INTERNAL_ERROR", message: "Photo confirmation failed." } });
     }
   });
@@ -122,7 +124,7 @@ export function createPhotosRouter(
         response.status(404).json({ error: { code: "NOT_FOUND", message: "Photo not found." } });
         return;
       }
-      console.error("Photo URL request failed", { errorName: error instanceof Error ? error.name : "unknown" });
+      console.error("Photo URL request failed", describeError(error));
       response.status(500).json({ error: { code: "INTERNAL_ERROR", message: "Photo is unavailable." } });
     }
   });

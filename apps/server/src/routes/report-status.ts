@@ -3,7 +3,7 @@ import type { Database } from "@myfinds/db";
 import { z } from "zod";
 
 import { consumeReportStatusIpLimit } from "../rate-limit";
-import { db } from "../services";
+import { db, describeError } from "../services";
 import { lookupReportStatus } from "../services/report-status";
 
 const requestSchema = z
@@ -56,7 +56,7 @@ export function createReportStatusRouter(
       response.json(report);
     } catch (error) {
       console.error("Private report status lookup failed", {
-        errorName: error instanceof Error ? error.name : "unknown",
+        ...describeError(error),
       });
       response.status(500).json({
         error: { code: "INTERNAL_ERROR", message: "Report status is unavailable." },

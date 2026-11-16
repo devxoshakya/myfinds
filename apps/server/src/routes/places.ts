@@ -1,14 +1,12 @@
 import { Router } from "express";
 import type { Database } from "@myfinds/db";
 
-import { db } from "../services";
+import { db, describeError } from "../services";
 
 export function createPlacesRouter(database: Database = db) {
   const router = Router();
 
   router.get("/", async (_request, response) => {
-    response.setHeader("Cache-Control", "public, max-age=300");
-
     try {
       const stations = await database.station.findMany({
         where: { active: true },
@@ -27,6 +25,9 @@ export function createPlacesRouter(database: Database = db) {
         },
       });
 
+      // Cache only successful responses — a cached 500 would hold the
+      // directory down for the CDN's 5-minute TTL.
+      response.setHeader("Cache-Control", "public, max-age=300");
       response.json({
         places: stations.map((station) => ({
           stationId: station.id,
@@ -40,7 +41,7 @@ export function createPlacesRouter(database: Database = db) {
       });
     } catch (error) {
       console.error("Place directory request failed", {
-        errorName: error instanceof Error ? error.name : "unknown",
+        ...describeError(error),
       });
       response.status(500).json({
         error: { code: "INTERNAL_ERROR", message: "The place directory is unavailable." },

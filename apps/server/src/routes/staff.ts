@@ -2,7 +2,7 @@ import { Router, type Request } from "express";
 import type { Database } from "@myfinds/db";
 import type { Session } from "@myfinds/auth";
 
-import { auth, db } from "../services";
+import { auth, db, describeError } from "../services";
 import {
   confirmReceipt,
   InvalidReceiptTransitionError,
@@ -90,7 +90,7 @@ export function createStaffRouter({ database, getSession }: StaffRouterDependenc
       });
     } catch (error) {
       console.error("Staff queue request failed", {
-        errorName: error instanceof Error ? error.name : "unknown",
+        ...describeError(error),
       });
       response.status(500).json({
         error: { code: "INTERNAL_ERROR", message: "The staff queue is unavailable." },
@@ -119,7 +119,7 @@ export function createStaffRouter({ database, getSession }: StaffRouterDependenc
       response.json({ claims });
     } catch (error) {
       console.error("Staff claims request failed", {
-        errorName: error instanceof Error ? error.name : "unknown",
+        ...describeError(error),
       });
       response.status(500).json({
         error: { code: "INTERNAL_ERROR", message: "The staff claims list is unavailable." },
@@ -154,7 +154,7 @@ export function createStaffRouter({ database, getSession }: StaffRouterDependenc
       } catch (error) {
         console.error("Matching failed after receipt confirmation", {
           reportId: result.reportId,
-          errorName: error instanceof Error ? error.name : "unknown",
+          ...describeError(error),
         });
       }
       response.json({ report: result });
@@ -181,7 +181,7 @@ export function createStaffRouter({ database, getSession }: StaffRouterDependenc
         return;
       }
       console.error("Receipt confirmation failed", {
-        errorName: error instanceof Error ? error.name : "unknown",
+        ...describeError(error),
       });
       response.status(500).json({
         error: { code: "INTERNAL_ERROR", message: "Receipt confirmation is unavailable." },

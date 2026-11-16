@@ -13,7 +13,7 @@ import {
   InvalidHandoverCodeError,
   MatchNotFoundError,
 } from "../services/claims";
-import { auth, db } from "../services";
+import { auth, db, describeError } from "../services";
 
 type Session = {
   user: { id: string; role: string };
@@ -78,7 +78,7 @@ export function createClaimsRouter({ database, getSession }: ClaimsRouterDepende
       return;
     }
     console.error("Claim request failed", {
-      errorName: error instanceof Error ? error.name : "unknown",
+      ...describeError(error),
     });
     response
       .status(500)

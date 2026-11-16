@@ -14,3 +14,17 @@ export const auth = createAuth(
   },
   db,
 );
+
+// Logging `error.name` alone hides Prisma codes (P2021/P2022/…) that are the
+// only way to diagnose prod DB issues from the logs. Meta carries no secrets.
+export function describeError(error: unknown) {
+  if (!(error instanceof Error)) return { errorName: "unknown" };
+  const extra = error as Error & { code?: string; meta?: unknown };
+  return {
+    errorName: error.name,
+    errorCode: extra.code,
+    errorMessage: error.message.split("\n")[0],
+    errorStack: error.stack?.split("\n").slice(1, 6),
+    errorMeta: extra.meta,
+  };
+}

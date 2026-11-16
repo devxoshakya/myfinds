@@ -4,7 +4,7 @@ import type { Session } from "@myfinds/auth";
 import type { Database } from "@myfinds/db";
 import { z } from "zod";
 
-import { auth, db } from "../services";
+import { auth, db, describeError } from "../services";
 import { consumeReportIpLimit } from "../rate-limit";
 import {
   createReport,
@@ -98,7 +98,7 @@ export function createReportsRouter({
       });
     } catch (error) {
       console.error("My reports request failed", {
-        errorName: error instanceof Error ? error.name : "unknown",
+        ...describeError(error),
       });
       response.status(500).json({
         error: { code: "INTERNAL_ERROR", message: "Your reports are unavailable." },
@@ -261,7 +261,7 @@ export function createReportsRouter({
       });
     } catch (error) {
       console.error("Report detail request failed", {
-        errorName: error instanceof Error ? error.name : "unknown",
+        ...describeError(error),
       });
       response.status(500).json({
         error: { code: "INTERNAL_ERROR", message: "Report details are unavailable." },
@@ -405,7 +405,7 @@ export function createReportsRouter({
       });
     } catch (error) {
       console.error("Report matches request failed", {
-        errorName: error instanceof Error ? error.name : "unknown",
+        ...describeError(error),
       });
       response.status(500).json({
         error: { code: "INTERNAL_ERROR", message: "Report matches are unavailable." },
@@ -489,7 +489,7 @@ export function createReportsRouter({
       } catch (error) {
         console.error("Report matching failed after report creation", {
           reportId: created.reportId,
-          errorName: error instanceof Error ? error.name : "unknown",
+          ...describeError(error),
         });
       }
       response.status(201).json({
@@ -522,7 +522,7 @@ export function createReportsRouter({
       }
 
       console.error("Report creation failed", {
-        errorName: error instanceof Error ? error.name : "unknown",
+        ...describeError(error),
       });
       response.status(500).json({
         error: { code: "INTERNAL_ERROR", message: "The report could not be saved." },

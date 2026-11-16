@@ -151,3 +151,44 @@ for (const name of NAMES) {
   }
   console.log(`materialized ${link} (commonjs js+d.ts, sources pruned)`);
 }
+
+// Pass 4: Prisma's generated client (compiled to CJS in pass 3) loads its
+// query compiler via require() of ESM-only .mjs runtime files. Vercel's
+// function runtime rejects require() of ES modules (ERR_REQUIRE_ESM), so
+// compile both to CommonJS and point the emitted require()s at the .cjs
+// copies. shortcut: hardcoded Prisma 7 runtime filenames — revisit on any
+// Prisma upgrade.
+const prismaRuntime = "node_modules/@prisma/client/runtime";
+const PRISMA_COMPILER_MJS = [
+  "query_compiler_fast_bg.postgresql.mjs",
+  "query_compiler_fast_bg.postgresql.wasm-base64.mjs",
+];
+let prismaPatched = false;
+for (const src of PRISMA_COMPILER_MJS) {
+  const srcPath = `${prismaRuntime}/${src}`;
+  if (!existsSync(srcPath)) continue;
+  const outPath = srcPath.replace(/\.mjs$/, ".cjs");
+  if (!existsSync(outPath)) {
+    run(["esbuild", srcPath, "--format=cjs", `--outfile=${outPath}`, "--log-level=warning"], ".");
+  }
+  prismaPatched = true;
+}
+const generatedDir = "node_modules/@myfinds/db/prisma/generated/internal";
+if (existsSync(generatedDir)) {
+  for (const entry of readdirSync(generatedDir, { withFileTypes: true })) {
+    if (entry.isDirectory() || !entry.name.endsWith(".js")) continue;
+    const p = join(generatedDir, entry.name);
+    const src = readFileSync(p, "utf8");
+    if (!src.includes("query_compiler_fast_bg.postgresql")) continue;
+    writeFileSync(
+      p,
+      src
+        .replaceAll("query_compiler_fast_bg.postgresql.wasm-base64.mjs", "query_compiler_fast_bg.postgresql.wasm-base64.cjs")
+        .replaceAll("query_compiler_fast_bg.postgresql.mjs", "query_compiler_fast_bg.postgresql.cjs"),
+    );
+    prismaPatched = true;
+  }
+}
+if (prismaPatched) {
+  console.log("prisma: compiled query compiler runtime to CommonJS");
+}
