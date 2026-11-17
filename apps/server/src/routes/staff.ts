@@ -5,6 +5,7 @@ import type { Session } from "@myfinds/auth";
 import { auth, db, describeError } from "../services";
 import {
   confirmReceipt,
+  getStaffMatchDetails,
   InvalidReceiptTransitionError,
   listStationClaims,
   listStationReports,
@@ -54,6 +55,41 @@ export function createStaffRouter({ database, getSession }: StaffRouterDependenc
     });
     return { session, stationIds: staffRows.map((row) => row.stationId), allowAllStations: false };
   }
+
+  router.get("/matches/:id", async (request, response) => {
+    response.setHeader("Cache-Control", "private, no-store, max-age=0");
+    const guard = await requireStaff(request);
+    if ("error" in guard) {
+      response.status(guard.error === "UNAUTHENTICATED" ? 401 : 403).json({
+        error:
+          guard.error === "UNAUTHENTICATED"
+            ? { code: "UNAUTHENTICATED", message: "Sign in to view staff match details." }
+            : guard.error,
+      });
+      return;
+    }
+
+    try {
+      const match = await getStaffMatchDetails(database, request.params.id, {
+        stationIds: guard.stationIds,
+        allowAllStations: guard.allowAllStations,
+      });
+      if (!match) {
+        response.status(404).json({
+          error: { code: "NOT_FOUND", message: "Match was not found." },
+        });
+        return;
+      }
+      response.json({ match });
+    } catch (error) {
+      console.error("Staff match details request failed", {
+        ...describeError(error),
+      });
+      response.status(500).json({
+        error: { code: "INTERNAL_ERROR", message: "Staff match details are unavailable." },
+      });
+    }
+  });
 
   router.get("/reports", async (request, response) => {
     response.setHeader("Cache-Control", "private, no-store, max-age=0");

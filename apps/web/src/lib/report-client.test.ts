@@ -4,6 +4,7 @@ import {
   copyReportCode,
   getReport,
   getReportMatches,
+  getStaffMatchDetails,
   getPrivateReportStatus,
   getMyReports,
   mapReportApiFields,
@@ -280,6 +281,64 @@ describe("getMyReports", () => {
         "https://api.example.test/api/reports/report-id/matches",
         expect.objectContaining({ cache: "no-store", credentials: "include" }),
       );
+    });
+
+    it("fetches staff-only match details without caching", async () => {
+      process.env.NEXT_PUBLIC_SERVER_URL = "https://api.example.test/";
+      const request = vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            match: {
+              id: "match-1",
+              score: 0.92,
+              scoreBreakdown: { place: 1, text: 0.8, date: 0.9, attributes: 1 },
+              reasons: ["Same station", "Similar item details"],
+              lost: {
+                id: "lost-1",
+                title: "Blue backpack",
+                category: "BAG",
+                description: "Blue hiking backpack",
+                brand: "Wildcraft",
+                color: "Blue",
+                eventDate: "2026-11-10",
+                place: { station: "Rajiv Chowk Metro", city: "Delhi" },
+              },
+              found: {
+                id: "found-1",
+                title: "Blue backpack",
+                category: "BAG",
+                description: "Blue hiking backpack",
+                brand: "Wildcraft",
+                color: "Blue",
+                eventDate: "2026-11-10",
+                place: { station: "Rajiv Chowk Metro", city: "Delhi" },
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+
+      await expect(getStaffMatchDetails("match-1", request)).resolves.toMatchObject({
+        id: "match-1",
+        score: 0.92,
+        reasons: ["Same station", "Similar item details"],
+        lost: { title: "Blue backpack" },
+        found: { title: "Blue backpack" },
+      });
+      expect(request).toHaveBeenCalledWith(
+        "https://api.example.test/api/staff/matches/match-1",
+        expect.objectContaining({ cache: "no-store", credentials: "include" }),
+      );
+    });
+
+    it("returns null for a missing staff match", async () => {
+      process.env.NEXT_PUBLIC_SERVER_URL = "https://api.example.test";
+      const request = vi.fn<typeof fetch>().mockResolvedValue(
+        new Response("{}", { status: 404 }),
+      );
+
+      await expect(getStaffMatchDetails("missing-match", request)).resolves.toBeNull();
     });
   });
 
