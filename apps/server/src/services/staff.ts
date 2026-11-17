@@ -1,6 +1,154 @@
+import { getMatchReasons, type MatchBreakdown, type MatchReport } from "@myfinds/shared";
 import type { Database } from "@myfinds/db";
+import { z } from "zod";
 
 import { createEnvPhotoStorage } from "./photos";
+
+const matchBreakdownSchema = z.object({
+  place: z.number(),
+  text: z.number(),
+  date: z.number(),
+  attributes: z.number(),
+});
+
+type StaffMatchSide = {
+  id: string;
+  title: string;
+  category: string;
+  description: string | null;
+  brand: string | null;
+  color: string | null;
+  eventDate: Date;
+  expiresAt: Date;
+  status: MatchReport["status"];
+  placeStation: {
+    id: string;
+    placeType: string;
+    cityId: string;
+    name: string;
+    city: { name: string };
+  };
+};
+
+function toMatchReport(report: StaffMatchSide, type: MatchReport["type"]): MatchReport {
+  return {
+    id: report.id,
+    type,
+    category: report.category,
+    title: report.title,
+    description: report.description,
+    brand: report.brand,
+    color: report.color,
+    eventDate: report.eventDate,
+    expiresAt: report.expiresAt,
+    status: report.status,
+    stationId: report.placeStation.id,
+    cityId: report.placeStation.cityId,
+    placeType: report.placeStation.placeType,
+  };
+}
+
+export async function getStaffMatchDetails(
+  database: Database,
+  matchId: string,
+  options: { stationIds: readonly string[]; allowAllStations?: boolean },
+) {
+  const match = await database.match.findFirst({
+    where: {
+      id: matchId,
+      ...(options.allowAllStations
+        ? {}
+        : { found: { custodyStationId: { in: [...options.stationIds] } } }),
+    },
+    select: {
+      id: true,
+      score: true,
+      scoreBreakdown: true,
+      lost: {
+        select: {
+          id: true,
+          title: true,
+          category: true,
+          description: true,
+          brand: true,
+          color: true,
+          eventDate: true,
+          expiresAt: true,
+          status: true,
+          placeStation: {
+            select: {
+              id: true,
+              placeType: true,
+              cityId: true,
+              name: true,
+              city: { select: { name: true } },
+            },
+          },
+        },
+      },
+      found: {
+        select: {
+          id: true,
+          title: true,
+          category: true,
+          description: true,
+          brand: true,
+          color: true,
+          eventDate: true,
+          expiresAt: true,
+          status: true,
+          placeStation: {
+            select: {
+              id: true,
+              placeType: true,
+              cityId: true,
+              name: true,
+              city: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!match) return null;
+
+  const scoreBreakdown: MatchBreakdown = matchBreakdownSchema.parse(match.scoreBreakdown);
+  const lost = toMatchReport(match.lost, "LOST");
+  const found = toMatchReport(match.found, "FOUND");
+
+  return {
+    id: match.id,
+    score: match.score,
+    scoreBreakdown,
+    reasons: getMatchReasons(scoreBreakdown, lost, found),
+    lost: {
+      id: match.lost.id,
+      title: match.lost.title,
+      category: match.lost.category,
+      description: match.lost.description,
+      brand: match.lost.brand,
+      color: match.lost.color,
+      eventDate: match.lost.eventDate.toISOString().slice(0, 10),
+      place: {
+        station: match.lost.placeStation.name,
+        city: match.lost.placeStation.city.name,
+      },
+    },
+    found: {
+      id: match.found.id,
+      title: match.found.title,
+      category: match.found.category,
+      description: match.found.description,
+      brand: match.found.brand,
+      color: match.found.color,
+      eventDate: match.found.eventDate.toISOString().slice(0, 10),
+      place: {
+        station: match.found.placeStation.name,
+        city: match.found.placeStation.city.name,
+      },
+    },
+  };
+}
 
 export class ReportNotFoundError extends Error {
   constructor() {

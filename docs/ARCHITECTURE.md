@@ -395,7 +395,8 @@ Codes: `UNAUTHENTICATED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_FAIL
 | `GET /api/reports/:id` | per `report:read` | none | Report, timeline, next action, custodian panel data (only if allowed) |
 | `PATCH /api/reports/:id` | per `report:update` | Partial fields, or `{ withdraw: true }` | Updated report |
 | `POST /api/reports/:id/receive` | staff, admin | `{ storageRef? }` | Updated report |
-| `GET /api/reports/:id/matches` | owner, staff, admin | none | Matches with comparison data and breakdown |
+| `GET /api/reports/:id/matches` | owner | none | Matches with comparison data and breakdown |
+| `GET /api/staff/matches/:id` | staff at the found item's custody station; admin | none | Comparison details, score, breakdown, and derived reasons; 404 outside station scope |
 | `POST /api/matches/:id/dismiss` | owner | none | Match |
 | `POST /api/matches/:id/claim` | owner | `{ answers[], claimPhotoKeys[], confirm: true }` | Claim; 423 if locked |
 | `POST /api/claims/:id/decision` | custodian | `{ decision: "APPROVED" \| "REJECTED", note? }` | Claim (+ code metadata if approved) |

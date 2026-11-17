@@ -24,11 +24,105 @@ function leakyDatabase() {
   const handover = issueHandoverCode();
   let queueQueried = false;
   const station = { name: "Rajiv Chowk Metro", city: { name: "Delhi" } };
+  const otherStation = { name: "Kashmere Gate Metro", city: { name: "Delhi" } };
   const questions = [{ question: "What is inside?", expectedAnswer: LEAK_ANSWER }];
+  const staffMatches = {
+    "match-1": {
+      id: "match-1",
+      score: 0.92,
+      scoreBreakdown: { place: 1, text: 0.8, date: 0.9, attributes: 1 },
+      lost: {
+        id: "lost-1",
+        title: "Blue backpack",
+        category: "BAG",
+        description: "Blue hiking backpack",
+        brand: "Wildcraft",
+        color: "Blue",
+        eventDate: new Date("2026-11-10T00:00:00.000Z"),
+        expiresAt: new Date("2027-01-09T00:00:00.000Z"),
+        status: "MATCH_FOUND",
+        placeStation: { ...station, id: "station-1", placeType: "METRO", cityId: "city-1" },
+        reporter: { email: LEAK_EMAIL },
+        handoverCodeEnc: "SECRET_HANDOVER_CODE_ENC",
+      },
+      found: {
+        id: "found-1",
+        title: "Blue backpack",
+        category: "BAG",
+        description: "Blue hiking backpack",
+        brand: "Wildcraft",
+        color: "Blue",
+        eventDate: new Date("2026-11-10T00:00:00.000Z"),
+        expiresAt: new Date("2027-01-09T00:00:00.000Z"),
+        status: "RECEIVED_BY_STOP",
+        custodyStationId: "station-1",
+        placeStation: { ...station, id: "station-1", placeType: "METRO", cityId: "city-1" },
+        questions,
+        storageRef: "SECRET_STORAGE_REF",
+        walkInNote: "SECRET_WALK_IN_NOTE",
+        photos: [{ r2Key: "SECRET_RAW_STORAGE_KEY" }],
+        reporter: { email: LEAK_EMAIL },
+      },
+    },
+    "match-other-station": {
+      id: "match-other-station",
+      score: 0.92,
+      scoreBreakdown: { place: 1, text: 0.8, date: 0.9, attributes: 1 },
+      lost: {
+        id: "lost-1",
+        title: "Blue backpack",
+        category: "BAG",
+        description: "Blue hiking backpack",
+        brand: "Wildcraft",
+        color: "Blue",
+        eventDate: new Date("2026-11-10T00:00:00.000Z"),
+        expiresAt: new Date("2027-01-09T00:00:00.000Z"),
+        status: "MATCH_FOUND",
+        placeStation: { ...station, id: "station-1", placeType: "METRO", cityId: "city-1" },
+        handoverCodeEnc: "SECRET_HANDOVER_CODE_ENC",
+      },
+      found: {
+        id: "found-2",
+        title: "Blue backpack",
+        category: "BAG",
+        description: "Blue hiking backpack",
+        brand: "Wildcraft",
+        color: "Blue",
+        eventDate: new Date("2026-11-10T00:00:00.000Z"),
+        expiresAt: new Date("2027-01-09T00:00:00.000Z"),
+        status: "RECEIVED_BY_STOP",
+        custodyStationId: "station-2",
+        placeStation: { ...otherStation, id: "station-2", placeType: "METRO", cityId: "city-1" },
+        questions,
+        storageRef: "SECRET_STORAGE_REF",
+        walkInNote: "SECRET_WALK_IN_NOTE",
+        photos: [{ r2Key: "SECRET_RAW_STORAGE_KEY" }],
+        reporter: { email: LEAK_EMAIL },
+      },
+    },
+  };
 
   const database = {
     stationStaff: {
-      findMany: async () => [{ stationId: "station-1" }],
+      findMany: async (query: { where: { userId: string; active?: boolean } }) => {
+        if (query.where.userId === "wrong-staff") return [{ stationId: "station-2" }];
+        if (query.where.userId === "inactive-staff") {
+          return query.where.active === true ? [] : [{ stationId: "station-1" }];
+        }
+        return [{ stationId: "station-1" }];
+      },
+    },
+    match: {
+      findFirst: async (query: {
+        where: { id: string; found?: { custodyStationId?: { in: string[] } } };
+      }) => {
+        const match = staffMatches[query.where.id as keyof typeof staffMatches];
+        const stationIds = query.where.found?.custodyStationId?.in;
+        if (!match || (stationIds && !stationIds.includes(match.found.custodyStationId))) {
+          return null;
+        }
+        return match;
+      },
     },
     report: {
       findUnique: async (query: { where: { id?: string; statusTokenHash?: string } }) => {
@@ -193,6 +287,12 @@ function assertNoLeaks(text: string, secrets: string[]) {
   }
 }
 
+function assertNoMatchDetails(text: string) {
+  for (const marker of ["match-1", '"score":0.92', "Blue backpack"]) {
+    expect(text).not.toContain(marker);
+  }
+}
+
 describe("leak prevention", () => {
   it("unauthenticated requests get 401 with no report data on every guarded route", async () => {
     await withServer(async () => null, async (url, secrets) => {
@@ -202,6 +302,7 @@ describe("leak prevention", () => {
         () => fetch(`${url}/api/reports/report-1/matches`),
         () => fetch(`${url}/api/staff/reports`),
         () => fetch(`${url}/api/staff/claims`),
+        () => fetch(`${url}/api/staff/matches/match-1`),
         () =>
           fetch(`${url}/api/staff/reports/report-1/confirm-receipt`, { method: "POST", body: "{}" }),
         () => fetch(`${url}/api/claims`, { method: "POST", body: "{}" }),
@@ -209,7 +310,9 @@ describe("leak prevention", () => {
       for (const request of endpoints) {
         const response = await request();
         expect(response.status).toBe(401);
-        assertNoLeaks(JSON.stringify(await response.json()), secrets);
+        const body = JSON.stringify(await response.json());
+        assertNoLeaks(body, secrets);
+        assertNoMatchDetails(body);
       }
     });
   });
@@ -259,11 +362,97 @@ describe("leak prevention", () => {
     await withServer(
       async () => ({ user: { id: "owner", role: "USER" } }),
       async (url, secrets) => {
-        for (const path of ["/api/staff/reports", "/api/staff/claims"]) {
+        for (const path of [
+          "/api/staff/reports",
+          "/api/staff/claims",
+          "/api/staff/matches/match-1",
+        ]) {
           const response = await fetch(`${url}${path}`);
           expect(response.status).toBe(403);
-          assertNoLeaks(JSON.stringify(await response.json()), secrets);
+          const body = JSON.stringify(await response.json());
+          assertNoLeaks(body, secrets);
+          assertNoMatchDetails(body);
         }
+      },
+    );
+  });
+
+  it("station staff can view only matches held at their active stations", async () => {
+    await withServer(
+      async () => ({ user: { id: "staff-1", role: "STATION_STAFF" } }),
+      async (url, secrets) => {
+        const response = await fetch(`${url}/api/staff/matches/match-1`);
+        const body = JSON.stringify(await response.json());
+        expect(response.status).toBe(200);
+        expect(response.headers.get("cache-control")).toBe("private, no-store, max-age=0");
+        expect(body).toContain('"score":0.92');
+        expect(body).toContain('"place":1');
+        expect(body).toContain("Same station");
+        expect(body).toContain("Blue hiking backpack");
+        expect(body).not.toContain("expectedAnswer");
+        assertNoLeaks(body, [
+          ...secrets,
+          "SECRET_STORAGE_REF",
+          "SECRET_WALK_IN_NOTE",
+          "SECRET_RAW_STORAGE_KEY",
+          "SECRET_HANDOVER_CODE_ENC",
+        ]);
+      },
+    );
+
+    await withServer(
+      async () => ({ user: { id: "wrong-staff", role: "STATION_STAFF" } }),
+      async (url, secrets) => {
+        const response = await fetch(`${url}/api/staff/matches/match-1`);
+        const body = JSON.stringify(await response.json());
+        expect(response.status).toBe(404);
+        assertNoLeaks(body, secrets);
+        assertNoMatchDetails(body);
+      },
+    );
+
+    await withServer(
+      async () => ({ user: { id: "inactive-staff", role: "STATION_STAFF" } }),
+      async (url, secrets) => {
+        const response = await fetch(`${url}/api/staff/matches/match-1`);
+        const body = JSON.stringify(await response.json());
+        expect(response.status).toBe(404);
+        assertNoLeaks(body, secrets);
+        assertNoMatchDetails(body);
+      },
+    );
+  });
+
+  it("admins can view matches at any station", async () => {
+    await withServer(
+      async () => ({ user: { id: "admin-1", role: "ADMIN" } }),
+      async (url, secrets) => {
+        const response = await fetch(`${url}/api/staff/matches/match-other-station`);
+        const body = JSON.stringify(await response.json());
+        expect(response.status).toBe(200);
+        expect(body).toContain('"id":"match-other-station"');
+        expect(body).toContain("Kashmere Gate Metro");
+        expect(body).not.toContain("expectedAnswer");
+        assertNoLeaks(body, [
+          ...secrets,
+          "SECRET_STORAGE_REF",
+          "SECRET_WALK_IN_NOTE",
+          "SECRET_RAW_STORAGE_KEY",
+          "SECRET_HANDOVER_CODE_ENC",
+        ]);
+      },
+    );
+  });
+
+  it("returns 404 for a missing staff match", async () => {
+    await withServer(
+      async () => ({ user: { id: "staff-1", role: "STATION_STAFF" } }),
+      async (url, secrets) => {
+        const response = await fetch(`${url}/api/staff/matches/missing-match`);
+        const body = JSON.stringify(await response.json());
+        expect(response.status).toBe(404);
+        assertNoLeaks(body, secrets);
+        assertNoMatchDetails(body);
       },
     );
   });
