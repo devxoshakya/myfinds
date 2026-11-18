@@ -15,6 +15,7 @@ import {
   decideReportClaim,
   getReport,
   ReportApiError,
+  type ClaimDecisionAction,
   type ReportDetail,
 } from "@/lib/report-api";
 import { matchesPath } from "@/lib/routes";
@@ -97,9 +98,9 @@ export default function ReportDetailClient({ id }: { id: string }) {
     getReport(id).then(setReport).catch(() => undefined);
   };
 
-  async function handleDecide(claimId: string, decision: "APPROVED" | "REJECTED") {
-    await decideReportClaim(claimId, decision);
-    toast.success(decision === "APPROVED" ? "Claim approved. Handover code issued to the claimant." : "Claim rejected.");
+  async function handleDecide(claimId: string, action: ClaimDecisionAction) {
+    await decideReportClaim(claimId, action);
+    toast.success(action.decision === "APPROVED" ? "Claim approved. Handover code issued to the claimant." : "Claim rejected.");
     refresh();
   }
 

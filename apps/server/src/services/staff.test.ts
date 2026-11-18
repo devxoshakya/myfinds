@@ -3,11 +3,11 @@ import type { Database } from "@myfinds/db";
 
 import {
   confirmReceipt,
-  InvalidReceiptTransitionError,
   listStationReports,
   ReportNotAtStaffStationError,
   ReportNotFoundError,
 } from "./staff";
+import { InvalidStatusTransitionError } from "./status-transitions";
 
 function fakeDatabase(report: {
   id: string;
@@ -101,14 +101,16 @@ describe("confirm receipt", () => {
   });
 
   it("rejects reports that are not waiting for stop confirmation", async () => {
-    const { database } = fakeDatabase({ ...report, status: "RECEIVED_BY_STOP" });
+    const { database, calls } = fakeDatabase({ ...report, status: "RECEIVED_BY_STOP" });
     await expect(
       confirmReceipt(database, "report-1", {
         stationIds: ["station-9"],
         actorId: "staff-1",
         actorRole: "STATION_STAFF",
       }),
-    ).rejects.toBeInstanceOf(InvalidReceiptTransitionError);
+    ).rejects.toBeInstanceOf(InvalidStatusTransitionError);
+    expect(calls.reportUpdate).toBeUndefined();
+    expect(calls.historyData).toBeUndefined();
   });
 
   it("throws when the report does not exist", async () => {

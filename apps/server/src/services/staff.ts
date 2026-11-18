@@ -3,6 +3,7 @@ import type { Database } from "@myfinds/db";
 import { z } from "zod";
 
 import { createEnvPhotoStorage } from "./photos";
+import { assertReportStatusTransition } from "./status-transitions";
 
 const matchBreakdownSchema = z.object({
   place: z.number(),
@@ -164,17 +165,11 @@ export class ReportNotAtStaffStationError extends Error {
   }
 }
 
-export class InvalidReceiptTransitionError extends Error {
-  constructor(currentStatus: string) {
-    super(`Report status ${currentStatus} cannot be marked as received.`);
-    this.name = "InvalidReceiptTransitionError";
-  }
-}
-
 /**
  * Station staff confirm the stop physically received the item:
  * SUBMITTED_TO_STOP -> RECEIVED_BY_STOP, then matching re-runs (BR-10).
- */export async function confirmReceipt(
+ */
+export async function confirmReceipt(
   database: Database,
   reportId: string,
   options: {
@@ -199,9 +194,7 @@ export class InvalidReceiptTransitionError extends Error {
   if (!options.allowAllStations && !options.stationIds.includes(owningStationId)) {
     throw new ReportNotAtStaffStationError();
   }
-  if (report.status !== "SUBMITTED_TO_STOP") {
-    throw new InvalidReceiptTransitionError(report.status);
-  }
+  assertReportStatusTransition(report.status, "RECEIVED_BY_STOP");
 
   await database.$transaction(async (transaction) => {
     await transaction.report.update({

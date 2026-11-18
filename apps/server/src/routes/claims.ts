@@ -10,9 +10,11 @@ import {
   confirmHandover,
   createClaim,
   decideClaim,
+  InvalidClaimDecisionReasonError,
   InvalidHandoverCodeError,
   MatchNotFoundError,
 } from "../services/claims";
+import { InvalidStatusTransitionError } from "../services/status-transitions";
 import { auth, db, describeError } from "../services";
 
 type Session = {
@@ -29,9 +31,13 @@ const createClaimSchema = z.object({
   answers: z.array(z.string().trim().min(1)).min(1).max(3),
 });
 
-const decisionSchema = z.object({
-  decision: z.enum(["APPROVED", "REJECTED"]),
-});
+const decisionSchema = z.discriminatedUnion("decision", [
+  z.object({ decision: z.literal("APPROVED") }),
+  z.object({
+    decision: z.literal("REJECTED"),
+    decisionNote: z.string().trim().min(1).max(500),
+  }),
+]);
 
 const handoverSchema = z.object({
   code: z.string().trim().regex(/^\d{6}$/),
@@ -71,6 +77,18 @@ export function createClaimsRouter({ database, getSession }: ClaimsRouterDepende
     }
     if (error instanceof ClaimAlreadyDecidedError) {
       response.status(409).json({ error: { code: "ALREADY_DECIDED", message: error.message } });
+      return;
+    }
+    if (error instanceof InvalidStatusTransitionError) {
+      response.status(409).json({
+        error: { code: "INVALID_STATUS_TRANSITION", message: error.message },
+      });
+      return;
+    }
+    if (error instanceof InvalidClaimDecisionReasonError) {
+      response.status(422).json({
+        error: { code: "VALIDATION_FAILED", message: error.message },
+      });
       return;
     }
     if (error instanceof ClaimNotAllowedError || error instanceof InvalidHandoverCodeError) {
@@ -130,14 +148,17 @@ export function createClaimsRouter({ database, getSession }: ClaimsRouterDepende
     const parsed = decisionSchema.safeParse(request.body);
     if (!parsed.success) {
       response.status(422).json({
-        error: { code: "VALIDATION_FAILED", message: "Choose approve or reject." },
+        error: {
+          code: "VALIDATION_FAILED",
+          message: "Choose approve or reject and include a rejection reason of 1 to 500 characters.",
+        },
       });
       return;
     }
 
     try {
       const result = await decideClaim(database, request.params.id, {
-        decision: parsed.data.decision,
+        ...parsed.data,
         ...actor,
       });
       response.json({ claim: result });

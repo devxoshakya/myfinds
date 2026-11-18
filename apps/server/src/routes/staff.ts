@@ -6,13 +6,13 @@ import { auth, db, describeError } from "../services";
 import {
   confirmReceipt,
   getStaffMatchDetails,
-  InvalidReceiptTransitionError,
   listStationClaims,
   listStationReports,
   ReportNotAtStaffStationError,
   ReportNotFoundError,
 } from "../services/staff";
 import { refreshMatchesForReport } from "../services/matching";
+import { InvalidStatusTransitionError } from "../services/status-transitions";
 
 type StaffSession = {
   user: Pick<Session["user"], "id" | "role">;
@@ -207,11 +207,11 @@ export function createStaffRouter({ database, getSession }: StaffRouterDependenc
         });
         return;
       }
-      if (error instanceof InvalidReceiptTransitionError) {
+      if (error instanceof InvalidStatusTransitionError) {
         response.status(409).json({
           error: {
             code: "INVALID_STATUS_TRANSITION",
-            message: "Only reports waiting for stop confirmation can be marked as received.",
+            message: error.message,
           },
         });
         return;
