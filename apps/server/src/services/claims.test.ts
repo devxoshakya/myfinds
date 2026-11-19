@@ -3,6 +3,7 @@ import type { Database } from "@myfinds/db";
 
 import {
   ClaimAttemptsExhaustedError,
+  InvalidClaimDecisionReasonError,
   ClaimNotAllowedError,
   createClaim,
   decideClaim,
@@ -134,7 +135,7 @@ describe("decide claim", () => {
 
   it("locks the pair when the third claim is rejected", async () => {
     const transactionCalls: Array<Record<string, unknown>> = [];
-    const lockedMatch = { ...ownedMatch, attemptsUsed: 3 };
+    const lockedMatch = { ...ownedMatch, status: "CLAIMED", attemptsUsed: 3 };
     const database = {
       claim: {
         findUnique: async () => ({
@@ -154,11 +155,123 @@ describe("decide claim", () => {
           statusHistory: { create: async ({ data }: { data: Record<string, unknown> }) => transactionCalls.push(data) },
         }),
     } as unknown as Database;
-    await decideClaim(database, "claim-1", { decision: "REJECTED", ...actor });
+    await decideClaim(database, "claim-1", {
+      decision: "REJECTED",
+      decisionNote: "The details do not match.",
+      ...actor,
+    });
     const matchUpdate = transactionCalls.find(
       (entry) => "status" in entry && (entry.status === "LOCKED" || entry.status === "REJECTED"),
     );
     expect(matchUpdate).toMatchObject({ status: "LOCKED" });
+  });
+
+  it("stores a trimmed rejection reason", async () => {
+    const transactionCalls: Array<Record<string, unknown>> = [];
+    const database = {
+      claim: {
+        findUnique: async () => ({
+          id: "claim-1",
+          decision: "PENDING",
+          handoverCodeEnc: null,
+          handoverExpiresAt: null,
+          handedOverAt: null,
+          match: { ...ownedMatch, status: "CLAIMED" },
+        }),
+      },
+      $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          claim: {
+            update: async ({ data }: { data: Record<string, unknown> }) => transactionCalls.push(data),
+          },
+          match: { update: async ({ data }: { data: Record<string, unknown> }) => transactionCalls.push(data) },
+          report: { update: async ({ data }: { data: Record<string, unknown> }) => transactionCalls.push(data) },
+          statusHistory: { create: async ({ data }: { data: Record<string, unknown> }) => transactionCalls.push(data) },
+        }),
+    } as unknown as Database;
+
+    await decideClaim(database, "claim-1", {
+      decision: "REJECTED",
+      decisionNote: "  The details do not match.  ",
+      ...actor,
+    });
+
+    expect(transactionCalls[0]).toMatchObject({
+      decision: "REJECTED",
+      decisionNote: "The details do not match.",
+    });
+  });
+
+  it("rejects a blank rejection reason before writing", async () => {
+    let transactionCalls = 0;
+    const database = {
+      claim: {
+        findUnique: async () => ({
+          id: "claim-1",
+          decision: "PENDING",
+          handoverCodeEnc: null,
+          handoverExpiresAt: null,
+          handedOverAt: null,
+          match: { ...ownedMatch, status: "CLAIMED" },
+        }),
+      },
+      $transaction: async () => {
+        transactionCalls += 1;
+      },
+    } as unknown as Database;
+
+    await expect(
+      decideClaim(database, "claim-1", {
+        decision: "REJECTED",
+        decisionNote: "   ",
+        ...actor,
+      }),
+    ).rejects.toBeInstanceOf(InvalidClaimDecisionReasonError);
+    expect(transactionCalls).toBe(0);
+  });
+
+  it("leaves all records and history unchanged when a status transition is invalid", async () => {
+    const state = {
+      claimDecision: "PENDING",
+      matchStatus: "SUGGESTED",
+      lostStatus: "MATCH_FOUND",
+      foundStatus: "MATCH_FOUND",
+      history: [] as string[],
+    };
+    const before = structuredClone(state);
+    let transactionCalls = 0;
+    const database = {
+      claim: {
+        findUnique: async () => ({
+          id: "claim-1",
+          decision: state.claimDecision,
+          handoverCodeEnc: null,
+          handoverExpiresAt: null,
+          handedOverAt: null,
+          match: {
+            ...ownedMatch,
+            status: state.matchStatus,
+            lost: { ...ownedMatch.lost, status: state.lostStatus },
+            found: { ...ownedMatch.found, status: state.foundStatus },
+          },
+        }),
+      },
+      $transaction: async (callback: (tx: unknown) => Promise<unknown>) => {
+        transactionCalls += 1;
+        return callback({
+          claim: { update: async () => { state.claimDecision = "APPROVED"; } },
+          match: { update: async () => { state.matchStatus = "VERIFIED"; } },
+          report: { update: async () => { state.lostStatus = "VERIFIED"; } },
+          statusHistory: { create: async () => { state.history.push("changed"); } },
+        });
+      },
+    } as unknown as Database;
+
+    await expect(
+      decideClaim(database, "claim-1", { decision: "APPROVED", ...actor }),
+    ).rejects.toThrow("MatchStatus cannot transition from SUGGESTED to VERIFIED.");
+    expect(transactionCalls).toBe(0);
+    expect(state).toEqual(before);
   });
 });
 
@@ -180,5 +293,59 @@ describe("confirm handover", () => {
     await expect(
       confirmHandover(database, "claim-1", { code: "000000", userId: "user-2", role: "USER", stationIds: ["station-9"] }),
     ).rejects.toBeInstanceOf(InvalidHandoverCodeError);
+  });
+
+  it("completes the match and returns both reports after a valid code", async () => {
+    const issued = issueHandoverCode();
+    const state = {
+      claimUpdated: false,
+      matchStatus: "VERIFIED",
+      lostStatus: "VERIFIED",
+      foundStatus: "VERIFIED",
+      historyCount: 0,
+    };
+    const verifiedMatch = {
+      ...ownedMatch,
+      status: "VERIFIED",
+      lost: { ...ownedMatch.lost, status: "VERIFIED" },
+      found: { ...ownedMatch.found, status: "VERIFIED" },
+    };
+    const database = {
+      claim: {
+        findUnique: async () => ({
+          id: "claim-1",
+          decision: "APPROVED",
+          handoverCodeEnc: issued.enc,
+          handoverExpiresAt: new Date(Date.now() + 60_000),
+          handedOverAt: null,
+          match: verifiedMatch,
+        }),
+      },
+      $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          claim: { update: async () => { state.claimUpdated = true; } },
+          match: { update: async ({ data }: { data: Record<string, unknown> }) => { state.matchStatus = data.status as string; } },
+          report: { update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+            if (where.id === verifiedMatch.lost.id) state.lostStatus = data.status as string;
+            else state.foundStatus = data.status as string;
+          } },
+          statusHistory: { create: async () => { state.historyCount += 1; } },
+        }),
+    } as unknown as Database;
+
+    await confirmHandover(database, "claim-1", {
+      code: issued.code,
+      userId: "user-2",
+      role: "USER",
+      stationIds: ["station-9"],
+    });
+
+    expect(state).toEqual({
+      claimUpdated: true,
+      matchStatus: "COMPLETED",
+      lostStatus: "RETURNED",
+      foundStatus: "RETURNED",
+      historyCount: 2,
+    });
   });
 });

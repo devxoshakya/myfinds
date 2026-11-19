@@ -6,7 +6,7 @@ import { Check, ShieldX } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { ReportApiError } from "@/lib/report-api";
+import { ReportApiError, type ClaimDecisionAction } from "@/lib/report-api";
 
 export type ClaimReviewClaim = {
   id: string;
@@ -24,7 +24,7 @@ type ClaimReviewProps = {
   photos?: Array<{ url: string }>;
   /** Optional context line, e.g. the report the claim belongs to. */
   heading?: string;
-  onDecide: (claimId: string, decision: "APPROVED" | "REJECTED") => Promise<void>;
+  onDecide: (claimId: string, action: ClaimDecisionAction) => Promise<void>;
   onHandover: (claimId: string, code: string) => Promise<void>;
 };
 
@@ -32,6 +32,7 @@ export function ClaimReview({ claim, questions, photos, heading, onDecide, onHan
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
+  const [decisionNote, setDecisionNote] = useState("");
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -96,20 +97,46 @@ export function ClaimReview({ claim, questions, photos, heading, onDecide, onHan
       </dl>
 
       {claim.decision === "PENDING" ? (
-        <div className="mt-5 grid grid-cols-2 gap-2 sm:flex">
-          <Button
-            variant="outline"
-            className="h-11 border-foreground"
-            disabled={busy}
-            onClick={() => void run(() => onDecide(claim.id, "REJECTED"))}
-          >
-            {busy ? "Working…" : "Reject claim"}
-          </Button>
-          <Button className="h-11" disabled={busy} onClick={() => void run(() => onDecide(claim.id, "APPROVED"))}>
-            <Check data-icon="inline-start" aria-hidden="true" />
-            Approve claim
-          </Button>
-        </div>
+        <>
+          <div className="mt-5 grid gap-1">
+            <label htmlFor={`rejection-reason-${claim.id}`} className="text-sm font-medium">
+              Reason for rejection
+            </label>
+            <Input
+              id={`rejection-reason-${claim.id}`}
+              value={decisionNote}
+              maxLength={500}
+              placeholder="Explain why the claim cannot be approved"
+              onChange={(event) => setDecisionNote(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">Required only when rejecting a claim.</p>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:flex">
+            <Button
+              variant="outline"
+              className="h-11 border-foreground"
+              disabled={busy || !decisionNote.trim()}
+              onClick={() =>
+                void run(() =>
+                  onDecide(claim.id, {
+                    decision: "REJECTED",
+                    decisionNote: decisionNote.trim(),
+                  }),
+                )
+              }
+            >
+              {busy ? "Working…" : "Reject claim"}
+            </Button>
+            <Button
+              className="h-11"
+              disabled={busy}
+              onClick={() => void run(() => onDecide(claim.id, { decision: "APPROVED" }))}
+            >
+              <Check data-icon="inline-start" aria-hidden="true" />
+              Approve claim
+            </Button>
+          </div>
+        </>
       ) : claim.handedOverAt ? (
         <p className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
           <Check className="size-4 text-success" aria-hidden="true" />

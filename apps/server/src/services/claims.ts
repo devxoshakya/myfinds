@@ -8,6 +8,11 @@ import {
 } from "node:crypto";
 import type { Database } from "@myfinds/db";
 
+import {
+  assertClaimDecisionTransition,
+  assertMatchStatusTransition,
+  assertReportStatusTransition,
+} from "./status-transitions";
 
 export class MatchNotFoundError extends Error {
   constructor() {
@@ -34,6 +39,13 @@ export class ClaimAlreadyDecidedError extends Error {
   constructor() {
     super("This claim was already decided.");
     this.name = "ClaimAlreadyDecidedError";
+  }
+}
+
+export class InvalidClaimDecisionReasonError extends Error {
+  constructor() {
+    super("A rejection reason between 1 and 500 characters is required.");
+    this.name = "InvalidClaimDecisionReasonError";
   }
 }
 
@@ -154,9 +166,7 @@ export async function createClaim(
   if (match.lost.reporterId !== input.claimantId) {
     throw new ClaimNotAllowedError("You can only claim matches on your own reports.");
   }
-  if (match.status !== "SUGGESTED" && match.status !== "REJECTED") {
-    throw new ClaimNotAllowedError("This match is no longer open for claims.");
-  }
+  assertMatchStatusTransition(match.status, "CLAIMED");
   if (match.attemptsUsed >= MAX_CLAIM_ATTEMPTS) throw new ClaimAttemptsExhaustedError();
   if (
     !["SUBMITTED", "MATCHING", "MATCH_FOUND", "RECEIVED_BY_STOP", "CLAIMED"].includes(
@@ -170,6 +180,7 @@ export async function createClaim(
 
   const attemptNo = match.attemptsUsed + 1;
   const lostStatus = match.lost.status;
+  assertReportStatusTransition(lostStatus, "CLAIMED");
   let createdClaimId = match.id;
   await database.$transaction(async (transaction) => {
     const created = await transaction.claim.create({
@@ -226,6 +237,7 @@ async function loadClaimForActor(
       match: {
         select: {
           id: true,
+          status: true,
           attemptsUsed: true,
           lost: { select: { id: true, status: true } },
           found: {
@@ -256,12 +268,35 @@ async function loadClaimForActor(
 export async function decideClaim(
   database: Database,
   claimId: string,
-  input: { decision: "APPROVED" | "REJECTED" } & ClaimActor,
+  input:
+    | ({ decision: "APPROVED"; decisionNote?: never } & ClaimActor)
+    | ({ decision: "REJECTED"; decisionNote: string } & ClaimActor),
 ) {
   const claim = await loadClaimForActor(database, claimId, input);
   if (claim.decision !== "PENDING") throw new ClaimAlreadyDecidedError();
+  if (
+    input.decision === "REJECTED" &&
+    (!input.decisionNote.trim() || input.decisionNote.trim().length > 500)
+  ) {
+    throw new InvalidClaimDecisionReasonError();
+  }
 
   const { match } = claim;
+  const nextMatchStatus =
+    input.decision === "APPROVED"
+      ? "VERIFIED"
+      : match.attemptsUsed >= MAX_CLAIM_ATTEMPTS
+        ? "LOCKED"
+        : "REJECTED";
+  assertClaimDecisionTransition(claim.decision, input.decision);
+  assertMatchStatusTransition(match.status, nextMatchStatus);
+  if (input.decision === "APPROVED") {
+    for (const side of [match.lost, match.found]) {
+      assertReportStatusTransition(side.status, "VERIFIED");
+    }
+  } else {
+    assertReportStatusTransition(match.lost.status, "MATCHING");
+  }
   const handover =
     input.decision === "APPROVED" ? issueHandoverCode() : null;
 
@@ -270,6 +305,9 @@ export async function decideClaim(
       where: { id: claim.id },
       data: {
         decision: input.decision,
+        ...(input.decision === "REJECTED"
+          ? { decisionNote: input.decisionNote.trim() }
+          : {}),
         decidedById: input.userId,
         decidedAt: new Date(),
         ...(handover
@@ -305,7 +343,7 @@ export async function decideClaim(
     // Rejected: the pair is done either way; after three rejections it locks.
     await transaction.match.update({
       where: { id: match.id },
-      data: { status: match.attemptsUsed >= MAX_CLAIM_ATTEMPTS ? "LOCKED" : "REJECTED" },
+      data: { status: nextMatchStatus },
     });
     await transaction.report.update({
       where: { id: match.lost.id },
@@ -348,6 +386,10 @@ export async function confirmHandover(
   }
 
   const { match } = claim;
+  assertMatchStatusTransition(match.status, "COMPLETED");
+  for (const side of [match.lost, match.found]) {
+    assertReportStatusTransition(side.status, "RETURNED");
+  }
   await database.$transaction(async (transaction) => {
     await transaction.claim.update({
       where: { id: claim.id },

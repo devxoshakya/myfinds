@@ -3,6 +3,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../prisma/generated/client";
 import type { DatabaseConfig } from "./config";
 
+export { ClaimDecision, MatchStatus, ReportStatus } from "../prisma/generated/client";
+
 // DB is Supabase Postgres. Runtime traffic goes through the pooled
 // (transaction-mode) connection URL; migrations/db push use DIRECT_URL in
 // prisma.config.ts. See docs/ARCHITECTURE.md §4 and docs/model.md.

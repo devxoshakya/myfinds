@@ -594,8 +594,15 @@ export async function submitReportClaim(matchId: string, answers: string[]): Pro
   await postClaimAction("/api/claims", { matchId, answers }, "The claim could not be sent.");
 }
 
-export async function decideReportClaim(claimId: string, decision: "APPROVED" | "REJECTED"): Promise<void> {
-  await postClaimAction(`/api/claims/${claimId}/decision`, { decision }, "The claim decision failed.");
+export type ClaimDecisionAction =
+  | { decision: "APPROVED" }
+  | { decision: "REJECTED"; decisionNote: string };
+
+export async function decideReportClaim(
+  claimId: string,
+  action: ClaimDecisionAction,
+): Promise<void> {
+  await postClaimAction(`/api/claims/${claimId}/decision`, action, "The claim decision failed.");
 }
 
 export async function confirmReportHandover(claimId: string, code: string): Promise<void> {

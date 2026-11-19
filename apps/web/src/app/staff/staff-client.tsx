@@ -16,6 +16,7 @@ import {
   getStaffClaims,
   getStaffQueue,
   ReportApiError,
+  type ClaimDecisionAction,
   type StaffClaim,
   type StaffQueueReport,
 } from "@/lib/report-api";
@@ -102,9 +103,9 @@ export default function StaffClient() {
       .catch(() => setClaims([]));
   };
 
-  async function handleDecide(claimId: string, decision: "APPROVED" | "REJECTED") {
-    await decideReportClaim(claimId, decision);
-    toast.success(decision === "APPROVED" ? "Claim approved. Handover code issued to the claimant." : "Claim rejected.");
+  async function handleDecide(claimId: string, action: ClaimDecisionAction) {
+    await decideReportClaim(claimId, action);
+    toast.success(action.decision === "APPROVED" ? "Claim approved. Handover code issued to the claimant." : "Claim rejected.");
     reloadClaims();
   }
 

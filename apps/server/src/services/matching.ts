@@ -5,6 +5,8 @@ import {
 } from "@myfinds/shared";
 import type { Database } from "@myfinds/db";
 
+import { assertReportStatusTransition } from "./status-transitions";
+
 const reportSelect = {
   id: true,
   type: true,
@@ -87,6 +89,16 @@ export async function refreshMatchesForReport(
       : { lostReportId: candidate.id, foundReportId: current.id },
   );
 
+  const nextStatus: "MATCHING" | "MATCH_FOUND" | "SUBMITTED_TO_STOP" =
+    matches.length > 0
+      ? "MATCH_FOUND"
+      : current.status === "SUBMITTED_TO_STOP"
+        ? current.status
+        : "MATCHING";
+  if (nextStatus !== current.status) {
+    assertReportStatusTransition(current.status, nextStatus);
+  }
+
   await database.$transaction(async (transaction) => {
     for (const match of matches) {
       const pair =
@@ -124,12 +136,6 @@ export async function refreshMatchesForReport(
       await transaction.match.deleteMany({ where: { id: { in: staleIds } } });
     }
 
-    const nextStatus: "MATCHING" | "MATCH_FOUND" | "SUBMITTED_TO_STOP" =
-      matches.length > 0
-        ? "MATCH_FOUND"
-        : current.status === "SUBMITTED_TO_STOP"
-          ? current.status
-          : "MATCHING";
     if (nextStatus !== current.status) {
       await transaction.report.update({
         where: { id: current.id },
