@@ -5,6 +5,7 @@ import { Input } from "@myfinds/ui/components/input";
 import { Label } from "@myfinds/ui/components/label";
 import { useForm } from "@tanstack/react-form";
 import { AlertCircle } from "lucide-react";
+import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
@@ -27,7 +28,18 @@ const schemaFor = (mode: "login" | "signup") =>
 
 type AuthFormProps = {
   mode: "login" | "signup";
+  nextPath?: string;
 };
+
+/** Internal paths only, so a crafted `next` cannot bounce users off-site. */
+function safeNextPath(value?: string) {
+  return value?.startsWith("/") &&
+    !value.startsWith("//") &&
+    !value.startsWith("/login") &&
+    !value.startsWith("/signup")
+    ? value
+    : "/reports";
+}
 
 const copy = {
   login: {
@@ -41,7 +53,7 @@ const copy = {
   },
   signup: {
     title: "Create your account",
-    description: "Verify your email before you report an item.",
+    description: "Create an account to report a lost or found item.",
     submit: "Create account",
     pending: "Creating account…",
     switchText: "Already have an account?",
@@ -50,8 +62,9 @@ const copy = {
   },
 };
 
-export default function AuthForm({ mode }: AuthFormProps) {
+export default function AuthForm({ mode, nextPath }: AuthFormProps) {
   const router = useRouter();
+  const redirectTo = safeNextPath(nextPath);
   const text = copy[mode];
   const schema = useMemo(() => schemaFor(mode), [mode]);
 
@@ -67,7 +80,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
           { email: value.email, password: value.password },
           {
             onSuccess: () => {
-              router.push("/reports");
+              router.push(redirectTo as Route);
               router.refresh();
             },
             onError: (error) => {
@@ -82,7 +95,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
         { email: value.email, password: value.password, name: value.name },
         {
           onSuccess: () => {
-            router.push("/reports");
+            router.push(redirectTo as Route);
             router.refresh();
           },
           onError: (error) => {
@@ -229,7 +242,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
         <p className="text-sm text-muted-foreground">
           {text.switchText}{" "}
           <Link
-            href={text.switchHref}
+            href={`${text.switchHref}?next=${encodeURIComponent(redirectTo)}` as Route}
             className="font-medium text-foreground underline underline-offset-4"
           >
             {text.switchLabel}

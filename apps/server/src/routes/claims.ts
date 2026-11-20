@@ -15,6 +15,7 @@ import {
   MatchNotFoundError,
 } from "../services/claims";
 import { InvalidStatusTransitionError } from "../services/status-transitions";
+import { consumeClaimSubmitLimit, consumeHandoverAttemptLimit } from "../rate-limit";
 import { auth, db, describeError } from "../services";
 
 type Session = {
@@ -111,6 +112,14 @@ export function createClaimsRouter({ database, getSession }: ClaimsRouterDepende
         .json({ error: { code: "UNAUTHENTICATED", message: "Sign in to submit a claim." } });
       return;
     }
+    const rateLimit = consumeClaimSubmitLimit(actor.userId);
+    if (!rateLimit.allowed) {
+      response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+      response.status(429).json({
+        error: { code: "RATE_LIMITED", message: "Too many claim attempts. Try again later." },
+      });
+      return;
+    }
     const parsed = createClaimSchema.safeParse(request.body);
     if (!parsed.success) {
       response.status(422).json({
@@ -180,6 +189,14 @@ export function createClaimsRouter({ database, getSession }: ClaimsRouterDepende
       response
         .status(422)
         .json({ error: { code: "VALIDATION_FAILED", message: "Enter the 6-digit code." } });
+      return;
+    }
+    const rateLimit = consumeHandoverAttemptLimit(request.params.id);
+    if (!rateLimit.allowed) {
+      response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));
+      response.status(429).json({
+        error: { code: "RATE_LIMITED", message: "Too many handover code attempts. Try again later." },
+      });
       return;
     }
 

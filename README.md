@@ -2,7 +2,7 @@
 
 Lost & found for the Delhi-NCR transport network. Commuters file lost-item reports, a rule-based engine matches them against found reports and the checked-in transport directory (DMRC, Indian Railways, DTC, ISBT), and station staff run the claim → handover flow with 6-digit one-time codes.
 
-Live: server at `myfinds-server.vercel.app` (web deploy pending)
+Live: web at `myfinds-web.vercel.app`, server at `myfinds-server.vercel.app`
 Demo credentials: see [`docs/DEMO_CREDENTIALS.md`](docs/DEMO_CREDENTIALS.md)
 
 ## Stack

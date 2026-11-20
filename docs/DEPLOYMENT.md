@@ -51,7 +51,7 @@ become the GitHub secrets below.
 
 | Variable | Notes |
 | --- | --- |
-| `BETTER_AUTH_SECRET` | 32+ chars. **Generate a fresh one for production** — it is also the report idempotency/status-token crypto key (`BETTER_AUTH_SECRET` is committed to the repo in `.env` today; treat it as leaked). |
+| `BETTER_AUTH_SECRET` | 32+ chars. **Generate a fresh one for production** — it is also the report idempotency/status-token crypto key. `.env` files are gitignored and were never committed; never commit them. |
 | `BETTER_AUTH_URL` | Production server URL, e.g. `https://myfinds-server.vercel.app`. |
 | `CORS_ORIGIN` | The web app's production URL, e.g. `https://myfinds-web.vercel.app` (only one origin is allowed — update if you add domains). |
 | `DATABASE_URL` | Supabase **pooled** (transaction-mode, port 6543) connection string. |
@@ -113,10 +113,14 @@ cd apps/web    && npx vercel --prod
 
 ## Known gaps after this setup
 
-- Staff surface is demo-minimum: receipt confirmation only. Still missing:
-  staff queue endpoint, claim approve/reject (attempt counting → `LOCKED`),
-  handover code flow, counter drop-off report creation (`RECEIVED_BY_STOP`),
-  daily rematch/expiry jobs, email notifications.
+- Staff flow is demo-complete: receipt confirmation, claims queue, approve/reject
+  (attempt counting → `LOCKED`), match details, and handover codes. Still missing:
+  daily rematch/expiry jobs and email notifications.
+- Web and API are separate `vercel.app` sites, so the Better Auth cookie is
+  host-only to the API and is invisible to the web server and to Next middleware.
+  UI route gating is therefore client-side (`apps/web/src/components/auth-gate.tsx`);
+  the API still enforces every permission. Making the cookie first-party would
+  require proxying `/api/*` through the web app.
 - In-memory rate limiting is per serverless instance — fine for a demo, needs
   Upstash/Redis for production guarantees.
 - In-memory idempotency/rate limiting resets between invocations (same caveat).

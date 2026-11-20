@@ -178,6 +178,53 @@ describe("POST /api/claims/:id/decision", () => {
     });
   });
 
+  it("blocks handover code guessing after five attempts on the same claim", async () => {
+    const claimId = `brute-${crypto.randomUUID()}`;
+    const { database } = fakeDatabase();
+
+    await withServer(database, async (url) => {
+      const handoverUrl = url.replace("/claim-1/decision", `/${claimId}/handover`);
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const response = await fetch(handoverUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: "000000" }),
+        });
+        expect(response.status).not.toBe(429);
+      }
+      const blocked = await fetch(handoverUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: "000000" }),
+      });
+      expect(blocked.status).toBe(429);
+      expect(blocked.headers.get("Retry-After")).toBe("3600");
+    });
+  });
+
+  it("blocks claim submission flooding after ten requests per user per hour", async () => {
+    const { database } = fakeDatabase();
+
+    await withServer(database, async (url) => {
+      const submitUrl = url.replace("/claim-1/decision", "");
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const response = await fetch(submitUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ matchId: "match-1", answers: ["a"] }),
+        });
+        expect(response.status).not.toBe(429);
+      }
+      const blocked = await fetch(submitUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: "match-1", answers: ["a"] }),
+      });
+      expect(blocked.status).toBe(429);
+      expect(blocked.headers.get("Retry-After")).toBe("3600");
+    });
+  });
+
   it("approves without changing the existing claim decision note", async () => {
     const { database, state } = fakeDatabase();
     await withServer(database, async (url) => {

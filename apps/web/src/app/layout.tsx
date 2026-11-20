@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 
 import "../index.css";
+import AuthGate from "@/components/auth-gate";
 import Header from "@/components/header";
 import Providers from "@/components/providers";
 import PwaRegistration from "@/components/pwa-registration";
@@ -52,6 +53,7 @@ export default function RootLayout({
         <PwaRegistration />
 
         <Providers>
+          <AuthGate />
           <a
             href="#main"
             className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:border focus:border-foreground focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium"

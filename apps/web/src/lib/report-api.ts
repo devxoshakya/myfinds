@@ -186,6 +186,7 @@ const confirmReceiptResponseSchema = z.object({
 
 const staffClaimSchema = z.object({
   id: z.string(),
+  matchId: z.string(),
   attemptNo: z.number().int(),
   decision: claimDecisionSchema,
   handoverExpiresAt: z.string().nullable(),

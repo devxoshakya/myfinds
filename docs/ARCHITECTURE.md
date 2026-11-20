@@ -349,6 +349,8 @@ If Prisma's `Unsupported` column causes migration drift, keep the column only in
 
 **Better Auth setup (intent).** Prisma adapter; email+password without email or phone verification; `user.additionalFields.role` (default `USER`, `input: false` so clients cannot set it); the Next.js cookie plugin; Redis as secondary storage for sessions and rate limits. Session helper `requireUser()` returns `{ id, role, stationIds[] }` (stationIds loaded from `StationStaff`).
 
+**UI route gating.** The web and API deploy as separate `vercel.app` sites, so the session cookie is host-only to the API and cannot be read by the web server or Next middleware. `apps/web/src/components/auth-gate.tsx` redirects on the client from `authClient.useSession()`: signed-out visitors leave `/report*`, `/reports*`, and `/staff*` for `/login?next=…`, signed-in visitors leave `/`, `/login`, and `/signup` for `/reports`, and only staff/admin reach `/staff*`. This is navigation only — every API route still enforces permissions.
+
 **`can(user, action, ctx)`** in `packages/shared/src/permissions.ts` is the only place permissions are decided. `ctx` carries the relevant report, match, claim, and station ids. Actions and rules:
 
 | Action | USER | STATION_STAFF | ADMIN |
@@ -409,7 +411,7 @@ Codes: `UNAUTHENTICATED` 401, `FORBIDDEN` 403, `NOT_FOUND` 404, `VALIDATION_FAIL
 | `GET /api/stats/public` | public | none | `{ reported, returned, stations }` (cached 5 min) |
 | `GET /api/cron/{expire,remind,rematch,cleanup}` | cron secret | none | `{ processed }` |
 
-Rate limits: report creation allows 10 requests per IP per hour and public report-status lookup allows 30 requests per IP per minute using in-process fixed-window counters. They key on the socket peer address, reset on restart, and are not shared across instances; behind a reverse proxy, requests may be grouped under the proxy IP. This is a basic single-instance safeguard, not a distributed abuse-control boundary. Replace them with a shared limiter and configure trusted proxy handling before horizontal scaling. Other planned limits: claim submit 10 per hour per user; handover code attempts 5 per hour per claim; uploads sign 60 per hour per user; auth endpoints per Better Auth defaults.
+Rate limits: report creation allows 10 requests per IP per hour, public report-status lookup allows 30 requests per IP per minute, claim submission allows 10 requests per user per hour, and handover verification allows 5 attempts per claim per hour (6th returns 429) using in-process fixed-window counters. They reset on restart and are not shared across instances; behind a reverse proxy, IP-keyed limits may be grouped under the proxy IP. This is a basic single-instance safeguard, not a distributed abuse-control boundary. Replace them with a shared limiter and configure trusted proxy handling before horizontal scaling. Other planned limits: uploads sign 60 per hour per user; auth endpoints per Better Auth defaults.
 
 ## 8. Core flows
 

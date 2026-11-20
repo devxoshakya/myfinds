@@ -246,6 +246,7 @@ export async function listStationClaims(
       handoverExpiresAt: true,
       match: {
         select: {
+          id: true,
           found: {
             select: {
               id: true,
@@ -269,6 +270,7 @@ export async function listStationClaims(
   return Promise.all(
     claims.map(async (claim) => ({
     id: claim.id,
+    matchId: claim.match.id,
     attemptNo: claim.attemptNo,
     decision: claim.decision,
     handoverExpiresAt: claim.handoverExpiresAt?.toISOString() ?? null,

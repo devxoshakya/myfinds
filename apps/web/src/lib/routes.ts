@@ -7,3 +7,5 @@ import type { Route } from "next";
 export const reportPath = (id: string) => `/reports/${id}` as Route;
 
 export const matchesPath = (id: string) => `/reports/${id}/matches` as Route;
+
+export const staffMatchPath = (id: string) => `/staff/matches/${id}` as Route;
