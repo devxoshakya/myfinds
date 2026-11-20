@@ -95,7 +95,7 @@ export async function refreshMatchesForReport(
       : current.status === "SUBMITTED_TO_STOP"
         ? current.status
         : "MATCHING";
-  if (nextStatus !== current.status) {
+  if (nextStatus !== current.status && matches.length === 0) {
     assertReportStatusTransition(current.status, nextStatus);
   }
 
@@ -117,6 +117,29 @@ export async function refreshMatchesForReport(
           scoreBreakdown: match.scored.breakdown,
         },
       });
+
+      const sides = [
+        { id: current.id, status: current.status },
+        { id: match.candidate.id, status: match.candidate.status },
+      ];
+      for (const side of sides) {
+        if (side.status === "MATCH_FOUND") continue;
+        if (!["SUBMITTED", "MATCHING", "RECEIVED_BY_STOP"].includes(side.status)) continue;
+        assertReportStatusTransition(side.status, "MATCH_FOUND");
+        await transaction.report.update({
+          where: { id: side.id },
+          data: { status: "MATCH_FOUND" },
+        });
+        await transaction.statusHistory.create({
+          data: {
+            reportId: side.id,
+            fromStatus: side.status,
+            toStatus: "MATCH_FOUND",
+            actorRole: "SYSTEM",
+            action: "MATCH_FOUND",
+          },
+        });
+      }
     }
 
     const retained = new Set(
@@ -136,7 +159,7 @@ export async function refreshMatchesForReport(
       await transaction.match.deleteMany({ where: { id: { in: staleIds } } });
     }
 
-    if (nextStatus !== current.status) {
+    if (nextStatus !== current.status && matches.length === 0) {
       await transaction.report.update({
         where: { id: current.id },
         data: { status: nextStatus },

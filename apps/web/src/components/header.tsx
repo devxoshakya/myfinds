@@ -45,8 +45,6 @@ export default function Header() {
         ];
   const activeLinks = isAppRoute ? appLinks : MARKETING_LINKS;
 
-  if (isAuthRoute) return null;
-
   useEffect(() => {
     if (!menuOpen) return;
 
@@ -63,6 +61,8 @@ export default function Header() {
       window.removeEventListener("keydown", onKey);
     };
   }, [menuOpen]);
+
+  if (isAuthRoute) return null;
 
   const close = () => setMenuOpen(false);
 

@@ -117,6 +117,20 @@ export function createReportsRouter({
     }
 
     try {
+      const ownedReport = await database.report.findFirst({
+        where: { id: request.params.id, reporterId: session.user.id },
+        select: { id: true, status: true },
+      });
+      if (!ownedReport) {
+        response.status(404).json({
+          error: { code: "NOT_FOUND", message: "Report matches were not found." },
+        });
+        return;
+      }
+      if (["SUBMITTED", "MATCHING", "MATCH_FOUND", "RECEIVED_BY_STOP"].includes(ownedReport.status)) {
+        await refreshMatchesForReport(database, ownedReport.id);
+      }
+
       const report = await database.report.findFirst({
         where: { id: request.params.id, reporterId: session.user.id },
         select: {
@@ -280,6 +294,20 @@ export function createReportsRouter({
     }
 
     try {
+      const ownedReport = await database.report.findFirst({
+        where: { id: request.params.id, reporterId: session.user.id },
+        select: { id: true, status: true },
+      });
+      if (!ownedReport) {
+        response.status(404).json({
+          error: { code: "NOT_FOUND", message: "Report matches were not found." },
+        });
+        return;
+      }
+      if (["SUBMITTED", "MATCHING", "MATCH_FOUND", "RECEIVED_BY_STOP"].includes(ownedReport.status)) {
+        await refreshMatchesForReport(database, ownedReport.id);
+      }
+
       const report = await database.report.findFirst({
         where: { id: request.params.id, reporterId: session.user.id },
         select: {
