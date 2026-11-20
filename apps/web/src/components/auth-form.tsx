@@ -4,11 +4,11 @@ import { Button } from "@myfinds/ui/components/button";
 import { Input } from "@myfinds/ui/components/input";
 import { Label } from "@myfinds/ui/components/label";
 import { useForm } from "@tanstack/react-form";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, LockKeyhole, ShieldCheck } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -67,6 +67,7 @@ export default function AuthForm({ mode, nextPath }: AuthFormProps) {
   const redirectTo = safeNextPath(nextPath);
   const text = copy[mode];
   const schema = useMemo(() => schemaFor(mode), [mode]);
+  const [activeField, setActiveField] = useState<"name" | "email" | "password" | null>(null);
 
   const form = useForm({
     defaultValues: {
@@ -110,13 +111,83 @@ export default function AuthForm({ mode, nextPath }: AuthFormProps) {
   });
 
   return (
-    <div className="mx-auto w-full max-w-[26rem] px-4 py-12 sm:px-0 sm:py-16">
-      <h1 className="text-[1.75rem] font-semibold tracking-tight">{text.title}</h1>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">{text.description}</p>
+    <div className="mf-auth">
+      <aside className="mf-auth__aside" aria-label="MyFinds account benefits">
+        <p className="mf-eyebrow">Private lost &amp; found</p>
+        <h2>
+          Your account.
+          <br />
+          <em>One secure record.</em>
+        </h2>
+        <p className="mf-auth__aside-copy">
+          Save reports, verify ownership and follow every handover from one private account.
+        </p>
+        <div className="mf-auth__stage" data-active={activeField ?? "none"}>
+          <div className="mf-auth__stage-chrome">
+            <span aria-hidden />
+            <span aria-hidden />
+            <span aria-hidden />
+            <p>myfinds.local/account</p>
+            <LockKeyhole size={10} strokeWidth={1.8} aria-hidden />
+          </div>
+          <div className="mf-auth__stage-body">
+            <div className="mf-auth__stage-head">
+              <span className="mf-auth__stage-icon" aria-hidden>
+                <ShieldCheck size={16} strokeWidth={1.8} />
+              </span>
+              <div>
+                <p>{activeField === "password" ? "Protecting your account" : "Secure account setup"}</p>
+                <strong>
+                  {activeField === "name"
+                    ? "Identity confirmed"
+                    : activeField === "email"
+                      ? "Contact details sealed"
+                      : activeField === "password"
+                        ? "Password protection"
+                        : "Private by default"}
+                </strong>
+              </div>
+              <span className="mf-auth__stage-live">Live</span>
+            </div>
+            <ol className="mf-auth__steps">
+              <li data-active={activeField === "name" || !activeField || undefined}>
+                <span>{mode === "signup" ? "01" : "01"}</span>
+                <div>
+                  <strong>{mode === "signup" ? "Identity" : "Recognise"}</strong>
+                  <em>{mode === "signup" ? "Name your account" : "Find your account"}</em>
+                </div>
+              </li>
+              <li data-active={activeField === "email" || undefined}>
+                <span>02</span>
+                <div>
+                  <strong>Contact</strong>
+                  <em>{activeField === "email" ? "Email being sealed" : "Private to you"}</em>
+                </div>
+              </li>
+              <li data-active={activeField === "password" || undefined}>
+                <span>03</span>
+                <div>
+                  <strong>Access</strong>
+                  <em>{activeField === "password" ? "Strengthen sign-in" : "Secure sign-in"}</em>
+                </div>
+              </li>
+            </ol>
+          </div>
+        </div>
+      </aside>
 
-      <form
+      <div className="mf-auth__panel">
+        <div className="mf-auth__heading">
+          <span className="mf-auth__mark" aria-hidden>MF</span>
+          <div>
+            <h1>{text.title}</h1>
+            <p>{text.description}</p>
+          </div>
+        </div>
+
+        <form
         noValidate
-        className="mt-8 grid gap-5 border border-border bg-card p-6"
+        className="mf-auth__form"
         onSubmit={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -129,19 +200,24 @@ export default function AuthForm({ mode, nextPath }: AuthFormProps) {
               const error = field.state.meta.errors[0]?.message;
               return (
                 <div className="grid gap-2">
-                  <Label htmlFor="name" className="text-sm font-semibold">
+                  <Label htmlFor="name" className="mf-auth__label">
                     Full name
                   </Label>
                   <Input
                     id="name"
                     name="name"
+                    placeholder="Aarav Sharma"
                     autoComplete="name"
-                    className="h-11 rounded-sm px-3 text-sm"
+                    className="mf-auth__input"
                     value={field.state.value}
                     aria-required="true"
                     aria-invalid={Boolean(error)}
                     aria-describedby={error ? "name-error" : undefined}
-                    onBlur={field.handleBlur}
+                    onFocus={() => setActiveField("name")}
+                    onBlur={() => {
+                      setActiveField(null);
+                      field.handleBlur();
+                    }}
                     onChange={(event) => field.handleChange(event.target.value)}
                   />
                   {error ? (
@@ -161,20 +237,25 @@ export default function AuthForm({ mode, nextPath }: AuthFormProps) {
             const error = field.state.meta.errors[0]?.message;
             return (
               <div className="grid gap-2">
-                <Label htmlFor="email" className="text-sm font-semibold">
+                <Label htmlFor="email" className="mf-auth__label">
                   Email
                 </Label>
                 <Input
                   id="email"
                   name="email"
                   type="email"
+                  placeholder="you@example.com"
                   autoComplete="email"
-                  className="h-11 rounded-sm px-3 text-sm"
+                  className="mf-auth__input"
                   value={field.state.value}
                   aria-required="true"
                   aria-invalid={Boolean(error)}
                   aria-describedby={error ? "email-error" : undefined}
-                  onBlur={field.handleBlur}
+                  onFocus={() => setActiveField("email")}
+                  onBlur={() => {
+                    setActiveField(null);
+                    field.handleBlur();
+                  }}
                   onChange={(event) => field.handleChange(event.target.value)}
                 />
                 {error ? (
@@ -193,20 +274,25 @@ export default function AuthForm({ mode, nextPath }: AuthFormProps) {
             const error = field.state.meta.errors[0]?.message;
             return (
               <div className="grid gap-2">
-                <Label htmlFor="password" className="text-sm font-semibold">
+                <Label htmlFor="password" className="mf-auth__label">
                   Password
                 </Label>
                 <Input
                   id="password"
                   name="password"
                   type="password"
+                  placeholder={mode === "login" ? "Enter your password" : "At least 8 characters"}
                   autoComplete={mode === "login" ? "current-password" : "new-password"}
-                  className="h-11 rounded-sm px-3 text-sm"
+                  className="mf-auth__input"
                   value={field.state.value}
                   aria-required="true"
                   aria-invalid={Boolean(error)}
                   aria-describedby={error ? "password-error" : "password-hint"}
-                  onBlur={field.handleBlur}
+                  onFocus={() => setActiveField("password")}
+                  onBlur={() => {
+                    setActiveField(null);
+                    field.handleBlur();
+                  }}
                   onChange={(event) => field.handleChange(event.target.value)}
                 />
                 {error ? (
@@ -231,7 +317,7 @@ export default function AuthForm({ mode, nextPath }: AuthFormProps) {
             <Button
               type="submit"
               size="lg"
-              className="h-12 w-full text-sm"
+              className="mf-auth__submit"
               disabled={!canSubmit || isSubmitting}
             >
               {isSubmitting ? text.pending : text.submit}
@@ -239,16 +325,16 @@ export default function AuthForm({ mode, nextPath }: AuthFormProps) {
           )}
         </form.Subscribe>
 
-        <p className="text-sm text-muted-foreground">
+        <p className="mf-auth__switch">
           {text.switchText}{" "}
           <Link
             href={`${text.switchHref}?next=${encodeURIComponent(redirectTo)}` as Route}
-            className="font-medium text-foreground underline underline-offset-4"
           >
             {text.switchLabel}
           </Link>
         </p>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }

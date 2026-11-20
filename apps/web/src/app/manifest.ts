@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
       "Report a lost or found item at any metro, railway, or bus station. MyFinds matches it and makes sure it reaches the real owner.",
     start_url: "/",
     display: "standalone",
-    background_color: "#F4F5F7",
+    background_color: "#F4F2EC",
     theme_color: "#111111",
     icons: [
       {
