@@ -104,11 +104,18 @@ confirm receipt on their stations: `POST /api/staff/reports/:id/confirm-receipt`
 
 ## 6. Deploy
 
-Push to `main` — the workflow deploys both projects. Manual deploy:
+Manual deploy (there is no CI workflow in the repo). Both projects set their
+Root Directory to the app folder inside the monorepo, so run from the repository
+root:
 
 ```sh
-cd apps/server && npx vercel --prod
-cd apps/web    && npx vercel --prod
+# web — the root `.vercel` link already points at myfinds-web
+vercel --prod
+
+# server — select the project explicitly
+VERCEL_ORG_ID=$(node -p "require('./apps/server/.vercel/project.json').orgId") \
+VERCEL_PROJECT_ID=$(node -p "require('./apps/server/.vercel/project.json').projectId") \
+vercel --prod
 ```
 
 ## Known gaps after this setup
