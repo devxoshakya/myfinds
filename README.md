@@ -41,7 +41,7 @@ Env lives in `apps/server/.env` (server) and web/db via varlock-encrypted env fi
 ## Tests & checks
 
 ```bash
-cd apps/server && bun test   # 38 tests
+cd apps/server && bun test   # 74 tests
 cd apps/web && bun test      # vitest
 bun run check-types          # turbo, whole monorepo
 ```
@@ -122,7 +122,8 @@ Full guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) · Architecture & rules: 
 
 ### Nov 23 — handover
 - [x] Handover flow: ready-for-handover → one-time 6-digit code (AES-256-GCM encrypted at rest, expiring) → confirm receipt
-- [x] `RETURNED` / `CLOSED` transitions wired
+- [x] `RETURNED` transition wired: both reports get `closedAt`, the match `COMPLETED`, sibling suggestions `DISMISSED` (BR-20)
+- [x] Station handover records the ID **type** only (BR-21)
 
 ### Nov 26 — launch prep
 - [x] Documentation finalized (ARCHITECTURE, DEPLOYMENT, Plan, PRD, demo credentials)

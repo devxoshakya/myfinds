@@ -10,6 +10,7 @@ import {
   confirmHandover,
   InvalidHandoverCodeError,
   issueHandoverCode,
+  MissingHandoverIdTypeError,
   readHandoverCode,
 } from "./claims";
 
@@ -298,10 +299,11 @@ describe("confirm handover", () => {
   it("completes the match and returns both reports after a valid code", async () => {
     const issued = issueHandoverCode();
     const state = {
-      claimUpdated: false,
+      claimUpdate: null as Record<string, unknown> | null,
       matchStatus: "VERIFIED",
-      lostStatus: "VERIFIED",
-      foundStatus: "VERIFIED",
+      siblingDismissal: null as Record<string, unknown> | null,
+      lostUpdate: null as Record<string, unknown> | null,
+      foundUpdate: null as Record<string, unknown> | null,
       historyCount: 0,
     };
     const verifiedMatch = {
@@ -323,11 +325,16 @@ describe("confirm handover", () => {
       },
       $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
-          claim: { update: async () => { state.claimUpdated = true; } },
-          match: { update: async ({ data }: { data: Record<string, unknown> }) => { state.matchStatus = data.status as string; } },
+          claim: { update: async ({ data }: { data: Record<string, unknown> }) => { state.claimUpdate = data; } },
+          match: {
+            update: async ({ data }: { data: Record<string, unknown> }) => { state.matchStatus = data.status as string; },
+            updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+              state.siblingDismissal = { where, data };
+            },
+          },
           report: { update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
-            if (where.id === verifiedMatch.lost.id) state.lostStatus = data.status as string;
-            else state.foundStatus = data.status as string;
+            if (where.id === verifiedMatch.lost.id) state.lostUpdate = data;
+            else state.foundUpdate = data;
           } },
           statusHistory: { create: async () => { state.historyCount += 1; } },
         }),
@@ -335,17 +342,91 @@ describe("confirm handover", () => {
 
     await confirmHandover(database, "claim-1", {
       code: issued.code,
+      idType: "GOVERNMENT_ID",
       userId: "user-2",
       role: "USER",
       stationIds: ["station-9"],
     });
 
-    expect(state).toEqual({
-      claimUpdated: true,
-      matchStatus: "COMPLETED",
-      lostStatus: "RETURNED",
-      foundStatus: "RETURNED",
-      historyCount: 2,
+    expect(state.matchStatus).toBe("COMPLETED");
+    expect(state.claimUpdate?.handoverIdType).toBe("GOVERNMENT_ID");
+    expect(state.siblingDismissal).toEqual({
+      where: { foundReportId: "found-1", status: "SUGGESTED" },
+      data: { status: "DISMISSED" },
     });
+    for (const update of [state.lostUpdate, state.foundUpdate]) {
+      expect(update?.status).toBe("RETURNED");
+      expect(update?.closedAt).toBeInstanceOf(Date);
+    }
+    expect(state.historyCount).toBe(2);
+  });
+
+  it("refuses a station handover that does not record the ID type (BR-21)", async () => {
+    const issued = issueHandoverCode();
+    let transactionCalls = 0;
+    const database = {
+      claim: {
+        findUnique: async () => ({
+          id: "claim-1",
+          decision: "APPROVED",
+          handoverCodeEnc: issued.enc,
+          handoverExpiresAt: new Date(Date.now() + 60_000),
+          handedOverAt: null,
+          match: { ...ownedMatch, status: "VERIFIED" },
+        }),
+      },
+      $transaction: async () => {
+        transactionCalls += 1;
+      },
+    } as unknown as Database;
+
+    await expect(
+      confirmHandover(database, "claim-1", {
+        code: issued.code,
+        userId: "user-2",
+        role: "USER",
+        stationIds: ["station-9"],
+      }),
+    ).rejects.toBeInstanceOf(MissingHandoverIdTypeError);
+    expect(transactionCalls).toBe(0);
+  });
+
+  it("hands over a finder-held item without an ID type", async () => {
+    const issued = issueHandoverCode();
+    const updates: Array<Record<string, unknown>> = [];
+    const finderMatch = {
+      ...ownedMatch,
+      status: "VERIFIED",
+      lost: { ...ownedMatch.lost, status: "VERIFIED" },
+      found: { ...ownedMatch.found, custodian: "FINDER", custodyStationId: null, status: "VERIFIED" },
+    };
+    const database = {
+      claim: {
+        findUnique: async () => ({
+          id: "claim-1",
+          decision: "APPROVED",
+          handoverCodeEnc: issued.enc,
+          handoverExpiresAt: new Date(Date.now() + 60_000),
+          handedOverAt: null,
+          match: finderMatch,
+        }),
+      },
+      $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          claim: { update: async ({ data }: { data: Record<string, unknown> }) => { updates.push(data); } },
+          match: { update: async () => {}, updateMany: async () => {} },
+          report: { update: async () => {} },
+          statusHistory: { create: async () => {} },
+        }),
+    } as unknown as Database;
+
+    await confirmHandover(database, "claim-1", {
+      code: issued.code,
+      userId: "user-2",
+      role: "USER",
+      stationIds: [],
+    });
+
+    expect(updates[0]).not.toHaveProperty("handoverIdType");
   });
 });

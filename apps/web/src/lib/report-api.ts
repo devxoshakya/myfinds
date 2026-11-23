@@ -190,6 +190,7 @@ const staffClaimSchema = z.object({
   attemptNo: z.number().int(),
   decision: claimDecisionSchema,
   handoverExpiresAt: z.string().nullable(),
+  requiresIdType: z.boolean(),
   answers: z.array(z.string()),
   questions: z.array(z.object({ question: z.string(), expectedAnswer: z.string() })),
   report: z.object({
@@ -606,8 +607,25 @@ export async function decideReportClaim(
   await postClaimAction(`/api/claims/${claimId}/decision`, action, "The claim decision failed.");
 }
 
-export async function confirmReportHandover(claimId: string, code: string): Promise<void> {
-  await postClaimAction(`/api/claims/${claimId}/handover`, { code }, "The handover code was rejected.");
+export const handoverIdTypes = [
+  { value: "GOVERNMENT_ID", label: "Government ID" },
+  { value: "DRIVING_LICENCE", label: "Driving licence" },
+  { value: "PASSPORT", label: "Passport" },
+  { value: "OTHER", label: "Other" },
+] as const;
+
+export type HandoverIdType = (typeof handoverIdTypes)[number]["value"];
+
+export async function confirmReportHandover(
+  claimId: string,
+  code: string,
+  idType?: HandoverIdType,
+): Promise<void> {
+  await postClaimAction(
+    `/api/claims/${claimId}/handover`,
+    { code, ...(idType ? { idType } : {}) },
+    "The handover code was rejected.",
+  );
 }
 
 export type StaffClaim = z.infer<typeof staffClaimSchema>;

@@ -63,6 +63,13 @@ export class InvalidHandoverCodeError extends Error {
   }
 }
 
+export class MissingHandoverIdTypeError extends Error {
+  constructor() {
+    super("Record the ID type presented at station handover.");
+    this.name = "MissingHandoverIdTypeError";
+  }
+}
+
 const MAX_CLAIM_ATTEMPTS = 3; // BR-17
 const HANDOVER_CODE_TTL_MS = 48 * 60 * 60 * 1000;
 
@@ -371,7 +378,7 @@ export async function decideClaim(
 export async function confirmHandover(
   database: Database,
   claimId: string,
-  input: { code: string } & ClaimActor,
+  input: { code: string; idType?: string } & ClaimActor,
 ) {
   const claim = await loadClaimForActor(database, claimId, input);
   if (claim.decision !== "APPROVED" || !claim.handoverCodeEnc) {
@@ -386,6 +393,10 @@ export async function confirmHandover(
   }
 
   const { match } = claim;
+  // BR-21: station handovers record the ID type checked at the counter.
+  if (match.found.custodian === "STATION" && !input.idType) {
+    throw new MissingHandoverIdTypeError();
+  }
   assertMatchStatusTransition(match.status, "COMPLETED");
   for (const side of [match.lost, match.found]) {
     assertReportStatusTransition(side.status, "RETURNED");
@@ -393,16 +404,25 @@ export async function confirmHandover(
   await database.$transaction(async (transaction) => {
     await transaction.claim.update({
       where: { id: claim.id },
-      data: { handedOverById: input.userId, handedOverAt: new Date() },
+      data: {
+        handedOverById: input.userId,
+        handedOverAt: new Date(),
+        ...(input.idType ? { handoverIdType: input.idType } : {}),
+      },
     });
     await transaction.match.update({
       where: { id: match.id },
       data: { status: "COMPLETED" },
     });
+    // BR-20: the found item is gone, so its remaining suggestions are moot.
+    await transaction.match.updateMany({
+      where: { foundReportId: match.found.id, status: "SUGGESTED" },
+      data: { status: "DISMISSED" },
+    });
     for (const side of [match.lost, match.found]) {
       await transaction.report.update({
         where: { id: side.id },
-        data: { status: "RETURNED" },
+        data: { status: "RETURNED", closedAt: new Date() },
       });
       await transaction.statusHistory.create({
         data: {

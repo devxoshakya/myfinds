@@ -41,7 +41,7 @@ export const statusTransitionRules = {
     [ReportStatus.WITHDRAWN]: [],
   } satisfies Record<ReportStatus, readonly ReportStatus[]>,
   match: {
-    [MatchStatus.SUGGESTED]: [MatchStatus.CLAIMED],
+    [MatchStatus.SUGGESTED]: [MatchStatus.CLAIMED, MatchStatus.DISMISSED],
     [MatchStatus.CLAIMED]: [
       MatchStatus.REJECTED,
       MatchStatus.LOCKED,

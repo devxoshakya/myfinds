@@ -2,11 +2,17 @@
 
 import { Button } from "@myfinds/ui/components/button";
 import { Input } from "@myfinds/ui/components/input";
+import { Select } from "@myfinds/ui/components/select";
 import { Check, ShieldX } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { ReportApiError, type ClaimDecisionAction } from "@/lib/report-api";
+import {
+  handoverIdTypes,
+  ReportApiError,
+  type ClaimDecisionAction,
+  type HandoverIdType,
+} from "@/lib/report-api";
 
 export type ClaimReviewClaim = {
   id: string;
@@ -24,14 +30,26 @@ type ClaimReviewProps = {
   photos?: Array<{ url: string }>;
   /** Optional context line, e.g. the report the claim belongs to. */
   heading?: string;
+  /** Station custody: the ID type checked at the counter is required (BR-21). */
+  requiresIdType?: boolean;
   onDecide: (claimId: string, action: ClaimDecisionAction) => Promise<void>;
-  onHandover: (claimId: string, code: string) => Promise<void>;
+  onHandover: (claimId: string, code: string, idType?: HandoverIdType) => Promise<void>;
 };
 
-export function ClaimReview({ claim, questions, photos, heading, onDecide, onHandover }: ClaimReviewProps) {
+export function ClaimReview({
+  claim,
+  questions,
+  photos,
+  heading,
+  requiresIdType = false,
+  onDecide,
+  onHandover,
+}: ClaimReviewProps) {
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
+  const [idType, setIdType] = useState<HandoverIdType | "">("");
+  const [idTypeError, setIdTypeError] = useState("");
   const [decisionNote, setDecisionNote] = useState("");
 
   async function run(action: () => Promise<void>) {
@@ -144,46 +162,82 @@ export function ClaimReview({ claim, questions, photos, heading, onDecide, onHan
         </p>
       ) : (
         <form
-          className="mt-5 grid gap-2 border-t border-border pt-4 sm:flex sm:items-start sm:gap-3"
+          className="mt-5 grid gap-2 border-t border-border pt-4"
           onSubmit={(event) => {
             event.preventDefault();
             if (code.trim().length !== 6) {
               setCodeError("Enter the 6-digit code shown to the claimant.");
               return;
             }
+            if (requiresIdType && !idType) {
+              setIdTypeError("Select the ID type you checked.");
+              return;
+            }
             setCodeError("");
+            setIdTypeError("");
             void run(async () => {
-              await onHandover(claim.id, code.trim());
+              await onHandover(claim.id, code.trim(), idType || undefined);
               setCode("");
             });
           }}
         >
-          <div className="grid flex-1 gap-1">
-            <label htmlFor={`handover-code-${claim.id}`} className="text-sm font-medium">
-              Claimant's handover code
-            </label>
-            <Input
-              id={`handover-code-${claim.id}`}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              placeholder="000000"
-              className="h-11 max-w-[12rem] rounded-sm px-3 font-mono text-base tracking-[0.2em]"
-              value={code}
-              aria-required="true"
-              onChange={(event) => {
-                setCode(event.target.value.replace(/\D/g, "").slice(0, 6));
-                setCodeError("");
-              }}
-            />
-            {codeError ? (
-              <p role="alert" className="text-sm text-destructive">
-                {codeError}
-              </p>
-            ) : null}
+          {requiresIdType ? (
+            <div className="grid gap-1">
+              <label htmlFor={`handover-id-type-${claim.id}`} className="text-sm font-medium">
+                ID type checked
+              </label>
+              <Select
+                id={`handover-id-type-${claim.id}`}
+                className="h-11 max-w-[16rem]"
+                value={idType}
+                aria-required="true"
+                onChange={(event) => {
+                  setIdType(event.target.value as HandoverIdType | "");
+                  setIdTypeError("");
+                }}
+              >
+                <option value="">Choose an ID type</option>
+                {handoverIdTypes.map((entry) => (
+                  <option key={entry.value} value={entry.value}>
+                    {entry.label}
+                  </option>
+                ))}
+              </Select>
+              {idTypeError ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {idTypeError}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+            <div className="grid flex-1 gap-1">
+              <label htmlFor={`handover-code-${claim.id}`} className="text-sm font-medium">
+                Claimant's handover code
+              </label>
+              <Input
+                id={`handover-code-${claim.id}`}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="000000"
+                className="h-11 max-w-[12rem] rounded-sm px-3 font-mono text-base tracking-[0.2em]"
+                value={code}
+                aria-required="true"
+                onChange={(event) => {
+                  setCode(event.target.value.replace(/\D/g, "").slice(0, 6));
+                  setCodeError("");
+                }}
+              />
+              {codeError ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {codeError}
+                </p>
+              ) : null}
+            </div>
+            <Button type="submit" className="h-11" disabled={busy}>
+              {busy ? "Checking…" : "Confirm handover"}
+            </Button>
           </div>
-          <Button type="submit" className="h-11" disabled={busy}>
-            {busy ? "Checking…" : "Confirm handover"}
-          </Button>
         </form>
       )}
     </article>
