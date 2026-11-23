@@ -39,6 +39,7 @@ describe("status transition rules", () => {
 
   it("allows a claim attempt and a retry after rejection", () => {
     expect(() => assertMatchStatusTransition(MatchStatus.SUGGESTED, MatchStatus.CLAIMED)).not.toThrow();
+    expect(() => assertMatchStatusTransition(MatchStatus.SUGGESTED, MatchStatus.DISMISSED)).not.toThrow();
     expect(() => assertMatchStatusTransition(MatchStatus.REJECTED, MatchStatus.CLAIMED)).not.toThrow();
   });
 

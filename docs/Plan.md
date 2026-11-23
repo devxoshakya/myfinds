@@ -97,7 +97,7 @@ To ensure security, privacy, and architectural integrity, the following rules ar
 ### Week 4: Handover, Polish, & Launch
 *   **Monday (Nov 23):**
     *   Implement the Handover Return flow: mark ready for handover, generate secure AES-encrypted code, confirm receipt.
-    *   Update transition table to handle `RETURNED` and `CLOSED` states.
+    *   Update transition table to handle `RETURNED` (+ `closedAt`) and dismiss the found report's other suggested matches.
 *   **Tuesday (Nov 24):**
     *   Conduct 3 external usability sessions. Log observations.
     *   Implement fixes for the top 3 usability issues identified.

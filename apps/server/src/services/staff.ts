@@ -253,6 +253,7 @@ export async function listStationClaims(
               number: true,
               title: true,
               questions: { orderBy: { position: "asc" }, select: { question: true, expectedAnswer: true } },
+              custodian: true,
               photos: {
                 where: { kind: "ITEM", deletedAt: null },
                 orderBy: { position: "asc" },
@@ -274,6 +275,7 @@ export async function listStationClaims(
     attemptNo: claim.attemptNo,
     decision: claim.decision,
     handoverExpiresAt: claim.handoverExpiresAt?.toISOString() ?? null,
+    requiresIdType: claim.match.found.custodian === "STATION",
     answers: (claim.answers as Array<{ text: string }>).map((answer) => answer.text),
     questions: claim.match.found.questions.map((entry) => ({
       question: entry.question,

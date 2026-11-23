@@ -13,6 +13,7 @@ import {
   InvalidClaimDecisionReasonError,
   InvalidHandoverCodeError,
   MatchNotFoundError,
+  MissingHandoverIdTypeError,
 } from "../services/claims";
 import { InvalidStatusTransitionError } from "../services/status-transitions";
 import { consumeClaimSubmitLimit, consumeHandoverAttemptLimit } from "../rate-limit";
@@ -40,8 +41,12 @@ const decisionSchema = z.discriminatedUnion("decision", [
   }),
 ]);
 
+const handoverIdTypes = ["GOVERNMENT_ID", "DRIVING_LICENCE", "PASSPORT", "OTHER"] as const;
+
 const handoverSchema = z.object({
   code: z.string().trim().regex(/^\d{6}$/),
+  // BR-21: the ID type checked at the counter, never the ID number.
+  idType: z.enum(handoverIdTypes).optional(),
 });
 
 export function createClaimsRouter({ database, getSession }: ClaimsRouterDependencies) {
@@ -87,6 +92,12 @@ export function createClaimsRouter({ database, getSession }: ClaimsRouterDepende
       return;
     }
     if (error instanceof InvalidClaimDecisionReasonError) {
+      response.status(422).json({
+        error: { code: "VALIDATION_FAILED", message: error.message },
+      });
+      return;
+    }
+    if (error instanceof MissingHandoverIdTypeError) {
       response.status(422).json({
         error: { code: "VALIDATION_FAILED", message: error.message },
       });
@@ -203,6 +214,7 @@ export function createClaimsRouter({ database, getSession }: ClaimsRouterDepende
     try {
       const result = await confirmHandover(database, request.params.id, {
         code: parsed.data.code,
+        idType: parsed.data.idType,
         ...actor,
       });
       response.json({ claim: result });
