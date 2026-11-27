@@ -1,6 +1,8 @@
 # MyFinds: Design Spec
 
-> Extracted from the five low-fidelity wireframes (Landing, Report a Lost Item, Report a Found Item, Potential Match, Report Status) and the PRD. Read `PRD.md` for behavior and `ARCHITECTURE.md` for structure.
+> Extracted from the five low-fidelity wireframes (Landing, Report a Lost Item, Report a Found Item, Potential Match, Report Status) and the PRD. Read `PRD.md` for behavior and `HANDOVER.mdx` for structure.
+>
+> **Implementation status.** This is the original design source. The current implementation is documented in `HANDOVER.mdx`; where this file describes a planned or superseded detail, the handover is authoritative.
 > Token values are **sampled by eye from the wireframes**. Treat them as the design tokens and adjust freely, but keep them in one place (`packages/ui` and `globals.css`).
 
 ## 1. Direction
@@ -208,9 +210,9 @@ Where the wireframes disagree with the PRD, **the PRD wins**. Specific resolutio
 | Found photos "shown in search results" | Shown only to matched owners | PRD BR-13 |
 | Handover code expiry 48 hours | 48 hours | Matches PRD |
 | Retention "30 Days" in the report header | "Active until {date}" (60-day report life); 30 days applies to photo retention | PRD BR-25, BR-26 |
-| Match list threshold 70%, default tab at 90% | Use `MATCH_MIN_SCORE` (0.50); first tab is the highest score | PRD config |
+| Match list threshold 70%, default tab at 90% | Use `MATCH_MIN_SCORE` (0.65); first tab is the highest score | PRD config |
 | "Within 20 m", vector, semantic, geo algorithm wording | Not allowed; copy comes from `scoreBreakdown` | PRD BR-11 |
-| Handover code "Argon2 hashed", "SHA-256 HMAC", cryptographic signing | Not user-facing; storage is specified in ARCHITECTURE section 9 | Implementation detail |
+| Handover code "Argon2 hashed", "SHA-256 HMAC", cryptographic signing | Not user-facing; storage is specified in HANDOVER §3.7 | Implementation detail |
 | "Transferred to Auction" after retention timeout | Remove | Out of scope |
 | "Map Pin" button | Remove | No coordinates in MVP |
 | Station Staff Mode checkbox visible to everyone | Visible to `STATION_STAFF` only | Permissions |

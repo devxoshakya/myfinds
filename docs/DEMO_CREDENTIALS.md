@@ -10,7 +10,7 @@ Shared internally only — **do not commit real production credentials here.**
 | Password | `staff123` |
 | Role | `STATION_STAFF` |
 | Stations | Rajiv Chowk Metro, Central Secretariat Metro |
-| Can do | Confirm receipt (`POST /api/staff/reports/:id/confirm-receipt`) for reports whose custody station is one of the two above |
+| Can do | Staff console at the two assigned stations: confirm receipt, review matches, review claims, and complete handovers |
 
 ## Admin
 
@@ -19,7 +19,7 @@ Shared internally only — **do not commit real production credentials here.**
 | Email | `admin@myfinds.pro` |
 | Password | `admin123` |
 | Role | `ADMIN` |
-| Can do | Confirm receipt at **any** station |
+| Can do | Every staff action at **any** station |
 
 Both sign in through the web app's login page (Better Auth email + password).
 Recreated via:
@@ -34,5 +34,6 @@ bun run staff:create --email admin@myfinds.pro --password "admin123" \
 ```
 
 > These passwords are weak by design for the demo. Rotate before any real
-> launch (`bun run staff:create` with an existing email keeps the password —
-> change it through the app or delete + recreate the user).
+> launch. `bun run staff:create` with an existing email keeps the password;
+> there is no password-change UI, so delete and recreate the user (or add a
+> reset flow) to change it.

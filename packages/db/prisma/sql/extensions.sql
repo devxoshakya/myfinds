@@ -1,5 +1,5 @@
--- Prisma-external SQL for MyFinds (docs/model.md §2.3, ARCHITECTURE.md §5).
--- Run with: bunx --bun prisma db execute --file prisma/sql/extensions.sql --scheme packages/db
+-- Prisma-external SQL for MyFinds (docs/model.md §2.3, docs/HANDOVER.mdx).
+-- Run with: cd packages/db && bunx --bun prisma db execute --file prisma/sql/extensions.sql
 -- (db push cannot manage generated columns or triggers.)
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
