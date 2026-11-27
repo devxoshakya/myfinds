@@ -1,6 +1,13 @@
 {
   "version": 2,
   "skills": {
+    "agent-email-inbox": {
+      "source": "resend/resend-skills",
+      "commit": "063246e39987faebc2608f968ca13a02d994a0d4",
+      "sourceType": "github",
+      "skillPath": "skills/agent-email-inbox/SKILL.md",
+      "computedHash": "61157a1f3781aca3614c1ff7777545b5a4e4cf8bec50d951d791b40796e902d0"
+    },
     "better-auth-best-practices": {
       "source": "better-auth/skills",
       "sourceType": "github",
@@ -18,6 +25,13 @@
       "sourceType": "github",
       "skillPath": "better-auth/emailAndPassword/SKILL.md",
       "computedHash": ""
+    },
+    "email-best-practices": {
+      "source": "resend/resend-skills",
+      "commit": "063246e39987faebc2608f968ca13a02d994a0d4",
+      "sourceType": "github",
+      "skillPath": "skills/email-best-practices/SKILL.md",
+      "computedHash": "9618340453f52b03987949227de251a953af1d47bf505975fce1f55032fb3451"
     },
     "neon-postgres": {
       "source": "neondatabase/agent-skills",
@@ -66,6 +80,27 @@
       "sourceType": "github",
       "skillPath": "prisma-orm-setup/SKILL.md",
       "computedHash": ""
+    },
+    "react-email": {
+      "source": "resend/resend-skills",
+      "commit": "063246e39987faebc2608f968ca13a02d994a0d4",
+      "sourceType": "github",
+      "skillPath": "skills/react-email/SKILL.md",
+      "computedHash": "51cb2479b8c98641bfd1e69e2260f53f5fad251ed2d8e7a0c3138e8899b3d4b3"
+    },
+    "resend": {
+      "source": "resend/resend-skills",
+      "commit": "063246e39987faebc2608f968ca13a02d994a0d4",
+      "sourceType": "github",
+      "skillPath": "skills/resend/SKILL.md",
+      "computedHash": "5d09dbdf01bc6d640f2340f24069307c53a7b58c6c94c1276932c22c3abc8cb1"
+    },
+    "resend-cli": {
+      "source": "resend/resend-skills",
+      "commit": "063246e39987faebc2608f968ca13a02d994a0d4",
+      "sourceType": "github",
+      "skillPath": "skills/resend-cli/SKILL.md",
+      "computedHash": "7bb3b05bb2144a4e73819ec96b7176a8917e2fcbda79cd3abbb11f41b4afaf51"
     },
     "shadcn": {
       "source": "shadcn/ui",

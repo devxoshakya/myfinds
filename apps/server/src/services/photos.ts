@@ -136,11 +136,11 @@ export function createPhotoStorage(config: PhotoStorageConfig) {
       return { key: input.key, contentType: head.ContentType, sizeBytes: head.ContentLength };
     },
 
-    async createReadUrl(key: string) {
+    async createReadUrl(key: string, expiresInSeconds = SIGNED_READ_SECONDS) {
       return getSignedUrl(
         client,
         new GetObjectCommand({ Bucket: config.bucketName, Key: key }),
-        { expiresIn: SIGNED_READ_SECONDS },
+        { expiresIn: expiresInSeconds },
       );
     },
 

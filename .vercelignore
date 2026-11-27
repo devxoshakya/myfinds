@@ -1,0 +1,8 @@
+# Keep CLI deployments under Vercel's 100 MB upload limit.
+.git
+.vercel
+.turbo
+**/.turbo
+.next
+**/.next
+**/node_modules

@@ -53,9 +53,10 @@ function fakeDatabase(claim = pendingClaim) {
       transactionCalls += 1;
       return callback({
         claim: {
-          update: async ({ data }: { data: Record<string, unknown> }) => {
+          updateMany: async ({ data }: { data: Record<string, unknown> }) => {
             state.decision = data.decision as string;
             state.decisionNote = (data.decisionNote as string | undefined) ?? null;
+            return { count: 1 };
           },
         },
         match: {
@@ -84,6 +85,10 @@ function fakeDatabase(claim = pendingClaim) {
 async function withServer(
   database: Database,
   callback: (url: string) => Promise<void>,
+  notifyApprovedClaim: (input: {
+    claimId: string;
+    handoverCode: string;
+  }) => Promise<void> = async () => {},
 ) {
   const app = express();
   app.use(express.json());
@@ -92,6 +97,7 @@ async function withServer(
     createClaimsRouter({
       database,
       getSession: async () => ({ user: { id: "custodian-1", role: "USER" } }),
+      notifyApprovedClaim,
     }),
   );
   const server = app.listen(0, "127.0.0.1");
@@ -240,5 +246,65 @@ describe("POST /api/claims/:id/decision", () => {
       expect(state.lostStatus).toBe("VERIFIED");
       expect(state.foundStatus).toBe("VERIFIED");
     });
+  });
+
+  it("notifies once with the issued code and never returns it", async () => {
+    const { database } = fakeDatabase();
+    const calls: Array<{ claimId: string; handoverCode: string }> = [];
+
+    await withServer(
+      database,
+      async (url) => {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "APPROVED" }),
+        });
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as {
+          claim: Record<string, unknown>;
+        };
+        expect(body.claim).not.toHaveProperty("handoverCode");
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toMatchObject({ claimId: "claim-1" });
+        expect(calls[0].handoverCode).toMatch(/^\d{6}$/);
+
+        // A retried approval must not email a second time.
+        const repeated = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "APPROVED" }),
+        });
+        expect(repeated.status).toBe(409);
+        expect(calls).toHaveLength(1);
+      },
+      async (input) => {
+        calls.push(input);
+      },
+    );
+  });
+
+  it("does not email when the claim is rejected", async () => {
+    const { database } = fakeDatabase();
+    const calls: Array<{ claimId: string; handoverCode: string }> = [];
+
+    await withServer(
+      database,
+      async (url) => {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            decision: "REJECTED",
+            decisionNote: "The details do not match.",
+          }),
+        });
+        expect(response.status).toBe(200);
+        expect(calls).toHaveLength(0);
+      },
+      async (input) => {
+        calls.push(input);
+      },
+    );
   });
 });
