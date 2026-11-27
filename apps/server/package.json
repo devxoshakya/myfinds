@@ -19,6 +19,7 @@
         "better-auth": "catalog:",
         "cors": "^2.8.6",
         "express": "^5.2.1",
+        "resend": "^6.40.1",
         "zod": "catalog:"
     },
     "devDependencies": {

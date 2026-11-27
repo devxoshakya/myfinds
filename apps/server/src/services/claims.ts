@@ -308,8 +308,10 @@ export async function decideClaim(
     input.decision === "APPROVED" ? issueHandoverCode() : null;
 
   await database.$transaction(async (transaction) => {
-    await transaction.claim.update({
-      where: { id: claim.id },
+    // Atomic guard: two concurrent approvals both read PENDING above. Only the
+    // first updateMany wins, so the loser never emails a second code.
+    const decided = await transaction.claim.updateMany({
+      where: { id: claim.id, decision: "PENDING" },
       data: {
         decision: input.decision,
         ...(input.decision === "REJECTED"
@@ -322,6 +324,7 @@ export async function decideClaim(
           : {}),
       },
     });
+    if (decided.count === 0) throw new ClaimAlreadyDecidedError();
 
     if (input.decision === "APPROVED") {
       await transaction.match.update({
@@ -368,7 +371,13 @@ export async function decideClaim(
     });
   });
 
-  return { decision: input.decision, handoverExpiresAt: handover?.expiresAt ?? null };
+  return {
+    decision: input.decision,
+    handoverExpiresAt: handover?.expiresAt ?? null,
+    // Internal only: the route strips this before responding. It exists so the
+    // approval email can reuse the exact code issued above (never regenerate).
+    handoverCode: handover?.code ?? null,
+  };
 }
 
 /**

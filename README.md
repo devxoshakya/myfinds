@@ -36,7 +36,7 @@ bun run db:seed              # Delhi seed data
 bun run dev                  # turbo dev (web + server)
 ```
 
-Env lives in `apps/server/.env` (server) and web/db via varlock-encrypted env files. Vars: `DATABASE_URL`, `DIRECT_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CORS_ORIGIN`, R2 keys.
+Env lives in `apps/server/.env` (server) and web/db via varlock-encrypted env files. Copy `apps/server/.env.example` and `apps/web/.env.example` to get started. Vars: `DATABASE_URL`, `DIRECT_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CORS_ORIGIN`, R2 keys, `RESEND_API_KEY`, `EMAIL_FROM`, `APP_URL`.
 
 ## Tests & checks
 

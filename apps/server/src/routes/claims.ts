@@ -16,6 +16,7 @@ import {
   MissingHandoverIdTypeError,
 } from "../services/claims";
 import { InvalidStatusTransitionError } from "../services/status-transitions";
+import { notifyClaimApproved } from "../services/notify";
 import { consumeClaimSubmitLimit, consumeHandoverAttemptLimit } from "../rate-limit";
 import { auth, db, describeError } from "../services";
 
@@ -26,6 +27,11 @@ type Session = {
 type ClaimsRouterDependencies = {
   database: Database;
   getSession: (headers: Request["headers"]) => Promise<Session | null>;
+  /** Injected in tests; defaults to the Resend notifier. Must never throw. */
+  notifyApprovedClaim?: (input: {
+    claimId: string;
+    handoverCode: string;
+  }) => Promise<void>;
 };
 
 const createClaimSchema = z.object({
@@ -49,8 +55,16 @@ const handoverSchema = z.object({
   idType: z.enum(handoverIdTypes).optional(),
 });
 
-export function createClaimsRouter({ database, getSession }: ClaimsRouterDependencies) {
+export function createClaimsRouter({
+  database,
+  getSession,
+  notifyApprovedClaim,
+}: ClaimsRouterDependencies) {
   const router = Router();
+  const notify =
+    notifyApprovedClaim ??
+    ((input: { claimId: string; handoverCode: string }) =>
+      notifyClaimApproved(database, input));
 
   // Any signed-in user may act; the service enforces the custodian rules.
   async function resolveActor(request: { headers: Request["headers"] }) {
@@ -177,11 +191,19 @@ export function createClaimsRouter({ database, getSession }: ClaimsRouterDepende
     }
 
     try {
-      const result = await decideClaim(database, request.params.id, {
+      // The code is for the approval email only; it is never serialized back.
+      const { handoverCode, ...claim } = await decideClaim(database, request.params.id, {
         ...parsed.data,
         ...actor,
       });
-      response.json({ claim: result });
+      if (handoverCode) {
+        await notify({ claimId: request.params.id, handoverCode }).catch((error) => {
+          console.error("Claim approval notification failed", {
+            errorName: error instanceof Error ? error.name : "unknown",
+          });
+        });
+      }
+      response.json({ claim });
     } catch (error) {
       handleError(response, error);
     }

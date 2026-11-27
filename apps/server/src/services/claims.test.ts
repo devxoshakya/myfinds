@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { Database } from "@myfinds/db";
 
 import {
+  ClaimAlreadyDecidedError,
   ClaimAttemptsExhaustedError,
   InvalidClaimDecisionReasonError,
   ClaimNotAllowedError,
@@ -134,6 +135,78 @@ describe("decide claim", () => {
     ).rejects.toBeInstanceOf(ClaimNotAllowedError);
   });
 
+  it("returns the issued handover code for the approval email", async () => {
+    let storedEnc: string | null = null;
+    const approvedMatch = {
+      ...ownedMatch,
+      status: "CLAIMED",
+      lost: { ...ownedMatch.lost, status: "CLAIMED" },
+      found: { ...ownedMatch.found, status: "MATCH_FOUND" },
+    };
+    const database = {
+      claim: {
+        findUnique: async () => ({
+          id: "claim-1",
+          decision: "PENDING",
+          handoverCodeEnc: null,
+          handoverExpiresAt: null,
+          handedOverAt: null,
+          match: approvedMatch,
+        }),
+      },
+      $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          claim: {
+            updateMany: async ({ data }: { data: { handoverCodeEnc?: string } }) => {
+              storedEnc = data.handoverCodeEnc ?? null;
+              return { count: 1 };
+            },
+          },
+          match: { update: async () => {} },
+          report: { update: async () => {} },
+          statusHistory: { create: async () => {} },
+        }),
+    } as unknown as Database;
+
+    const result = await decideClaim(database, "claim-1", {
+      decision: "APPROVED",
+      ...actor,
+    });
+
+    expect(result.handoverCode).toMatch(/^\d{6}$/);
+    expect(storedEnc).not.toBeNull();
+    expect(readHandoverCode(storedEnc!)).toBe(result.handoverCode!);
+  });
+
+  it("rejects an approval that lost the race to another decision", async () => {
+    const approvedMatch = {
+      ...ownedMatch,
+      status: "CLAIMED",
+      lost: { ...ownedMatch.lost, status: "CLAIMED" },
+      found: { ...ownedMatch.found, status: "MATCH_FOUND" },
+    };
+    const database = {
+      claim: {
+        findUnique: async () => ({
+          id: "claim-1",
+          decision: "PENDING",
+          handoverCodeEnc: null,
+          handoverExpiresAt: null,
+          handedOverAt: null,
+          match: approvedMatch,
+        }),
+      },
+      $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          claim: { updateMany: async () => ({ count: 0 }) },
+        }),
+    } as unknown as Database;
+
+    await expect(
+      decideClaim(database, "claim-1", { decision: "APPROVED", ...actor }),
+    ).rejects.toBeInstanceOf(ClaimAlreadyDecidedError);
+  });
+
   it("locks the pair when the third claim is rejected", async () => {
     const transactionCalls: Array<Record<string, unknown>> = [];
     const lockedMatch = { ...ownedMatch, status: "CLAIMED", attemptsUsed: 3 };
@@ -150,7 +223,7 @@ describe("decide claim", () => {
       },
       $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
-          claim: { update: async ({ data }: { data: Record<string, unknown> }) => transactionCalls.push(data) },
+          claim: { updateMany: async ({ data }: { data: Record<string, unknown> }) => { transactionCalls.push(data); return { count: 1 }; } },
           match: { update: async ({ data }: { data: Record<string, unknown> }) => transactionCalls.push(data) },
           report: { update: async ({ data }: { data: Record<string, unknown> }) => transactionCalls.push(data) },
           statusHistory: { create: async ({ data }: { data: Record<string, unknown> }) => transactionCalls.push(data) },
@@ -183,7 +256,7 @@ describe("decide claim", () => {
       $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
         callback({
           claim: {
-            update: async ({ data }: { data: Record<string, unknown> }) => transactionCalls.push(data),
+            updateMany: async ({ data }: { data: Record<string, unknown> }) => { transactionCalls.push(data); return { count: 1 }; },
           },
           match: { update: async ({ data }: { data: Record<string, unknown> }) => transactionCalls.push(data) },
           report: { update: async ({ data }: { data: Record<string, unknown> }) => transactionCalls.push(data) },
