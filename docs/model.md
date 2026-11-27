@@ -1,6 +1,8 @@
 # MyFinds: Data Model & Acceptance Criteria
 
-> Companion to `PRD.md` (behavior) and `ARCHITECTURE.md` (structure). This file is the **data
+> **Implementation status.** This is the original data-model source. The current implementation is documented in `HANDOVER.mdx`; where this file describes a planned or superseded detail (for example, R2, Redis, SendGrid, or cron), the handover is authoritative.
+>
+> Companion to `PRD.md` (behavior) and `HANDOVER.mdx` (structure). This file is the **data
 > model documentation** drafted for the Nov 2 plan item: tables, secrets, and field permissions.
 > It also collects the **testable acceptance criteria** for the MVP (the plan's example:
 > "finder never sees owner's hidden detail" lives in section 4 as AC-PRIV-01).
@@ -8,7 +10,7 @@
 > Adaptation note: this repo uses a bun + Turborepo layout (`apps/web`, `apps/server`,
 > `packages/db` with a multi-file Prisma schema at `packages/db/prisma/schema/`). Better Auth
 > owns its tables (`user`, `session`, `account`, `verification` — see `auth.prisma`). Where
-> ARCHITECTURE.md names a `packages/shared` module, implement the equivalent in this repo
+> HANDOVER.mdx names a `packages/shared` module, implement the equivalent in this repo
 > (`packages/auth` / `apps/server/src/services`).
 
 ---
@@ -70,7 +72,7 @@ User *—* Station via StationStaff (staff scope)
 
 Indexes: `(type, category, status, expiresAt)` for the matching query; `reporterId`; `(custodyStationId, status)` for staff queues.
 
-### 2.4 Photos (private R2, BR-12/BR-13)
+### 2.4 Photos (private S3-compatible storage, BR-12/BR-13)
 
 | Field | Notes |
 | --- | --- |
@@ -98,7 +100,7 @@ Bucket is strictly private. Reads only via `GET /api/photos/:id/url` → 5-minut
 | `scoreBreakdown` | JSON `{ place, text, date, attributes }` per BR-09 |
 | `status` | `SUGGESTED` → `CLAIMED` → `VERIFIED` → `COMPLETED`; branches: `REJECTED`, `LOCKED`, `DISMISSED` |
 
-Scoring: `0.30 place + 0.30 text + 0.20 date + 0.20 attributes`; keep ≥ `MATCH_MIN_SCORE` (0.50), top `MATCH_MAX_PER_REPORT` (5). Hard filters first (BR-08): opposite type, same category, same city, matchable status set, not expired, date window. Rule-based only — **no AI/vectors in the MVP**.
+Scoring: `0.30 place + 0.30 text + 0.20 date + 0.20 attributes`; keep ≥ `MATCH_MIN_SCORE` (0.65), top `MATCH_MAX_PER_REPORT` (5). Hard filters first (BR-08): opposite type, same category, same city, matchable status set, not expired, date window. Rule-based only — **no AI/vectors in the MVP**.
 
 `Claim` — unique on `(matchId, attemptNo)`.
 
@@ -122,21 +124,21 @@ Scoring: `0.30 place + 0.30 text + 0.20 date + 0.20 attributes`; keep ≥ `MATCH
 | # | Secret | Where it lives | Rules |
 | --- | --- | --- | --- |
 | S1 | Handover code (6-digit plaintext) | **Never stored.** Generated `crypto.randomInt(0, 1_000_000)`, zero-padded | Shown only to the claimant, only while claim `APPROVED`, match `VERIFIED`, and unexpired. Sent by email at issue/reissue. Never logged, never in any API response for other viewers |
-| S2 | `handoverCodeEnc` | `Claim` row | AES-256-GCM with `HANDOVER_CODE_KEY` (32-byte base64 env var), random IV, format `iv.tag.ciphertext` base64. Encrypt-and-decrypt (not hash) because the owner's status page must re-display the code. Verified with `crypto.timingSafeEqual`. Reissue overwrites ciphertext + expiry and resets the Redis attempt counter. **Stripped by the serializer for everyone** |
+| S2 | `handoverCodeEnc` | `Claim` row | AES-256-GCM with a key derived from `BETTER_AUTH_SECRET`, random IV, format `iv.tag.ciphertext` base64. Encrypt-and-decrypt (not hash) because the owner's status page must re-display the code. Verified with `crypto.timingSafeEqual`. No reissue UI is implemented; the code-attempt counter is process-local. **Stripped by the serializer for everyone** |
 | S3 | `expectedAnswer` | `VerificationQuestion` row | Visible only to: custodian (finder) of the found report, staff of the custody station, admin. **Never** to the owner/claimant — not even after approval |
-| S4 | `PROOF` photos | R2 private bucket + `Photo` row | Never to the claimant, never public; 5-min signed URL only |
+| S4 | `PROOF` photos | Private S3-compatible bucket + `Photo` row | Never to the claimant, never public; 5-min signed URL only |
 | S5 | `walkInNote` | `Report` row | Staff of the station and admin only; hidden from other users |
 | S6 | `storageRef` | `Report` row | Staff of the custody station and admin only |
-| S7 | Personal contact (`email`) | `user` | Only ever shown to the user themselves. Cross-user: after claim approval **with finder custody**, owner and finder each see the other's first name + email (BR-23). With station custody, nobody sees personal contact — the owner sees station name, counter hours, and the code |
-| S8 | R2 object keys / bucket URLs | env + `Photo.r2Key` | Raw keys never leave the server; all reads are 5-min presigned GETs after `can('photo:read')` |
+| S7 | Personal contact (`email`) | `user` | Only ever shown to the user themselves. The current approval emails go to each party separately and do not include the other party's email. With station custody, the owner sees the station name, counter hours, and the code |
+| S8 | Storage object keys / bucket URLs | env + `Photo.r2Key` | Raw keys never leave the server; all reads are 5-min presigned GETs after an ownership check |
 | S9 | Auth passwords / tokens | `account.password` (bcrypt), `session.token` | Owned entirely by Better Auth; httpOnly cookies |
-| S10 | SendGrid / R2 / DB / cron secrets | env vars only (varlock-managed in this repo) | No PII, codes, or secrets in logs; cron routes reject requests without `CRON_SECRET` |
-| S11 | Private report-status token | Raw token exists only at creation and in the successful response; `Report.statusTokenHash` stores its SHA-256 hash | Generate with a cryptographically secure random source; never log or persist the raw token. Anyone holding it can access the private status lookup. |
+| S10 | Resend / S3 / DB secrets | env vars only | No PII, codes, or secrets in logs; there are no cron routes in the current app |
+| S11 | Private report-status token | Raw token exists only at creation and in the successful response; `Report.statusTokenHash` stores its SHA-256 hash, and `ReportIdempotency` stores an encrypted copy for replay | Generate with a cryptographically secure random source; never log or persist the raw token in plaintext. Anyone holding it can access the private status lookup. |
 
 Additional model-level enforcement:
 
 - **Append-only:** raw SQL trigger raises on any `UPDATE`/`DELETE` against `StatusHistory`.
-- **Server-side counters:** claim attempts counted in DB (`Claim.attemptNo` unique per match), handover-code tries counted in Redis — never client-side.
+- **Server-side counters:** claim attempts counted in DB (`Claim.attemptNo` unique per match), handover-code tries counted by the process-local rate limiter — never client-side.
 - **No client trust:** `role`, `status`, `custodian`, `custodyStationId`, custody/decision fields are server-assigned only; every input validated with shared Zod schemas.
 
 ---
@@ -157,7 +159,7 @@ Grouped by area. Each is phrased to be automatable (unit via Vitest, integration
 
 - **AC-AUTH-01** A newly signed-up user can create a report after signing in without an email or phone verification step. *(e2e.)*
 - **AC-AUTH-02** A client cannot set `role`, status, custody, or decision fields; posting them is ignored or 422s. *(Integration test posting over-payloaded bodies.)*
-- **AC-AUTH-03** Every row of the permission matrix (ARCHITECTURE.md §6) passes for all three roles, including negative cases; a staff member of station A cannot act on station B's items. *(Vitest, one test per action×role cell.)*
+- **AC-AUTH-03** Every row of the permission matrix (HANDOVER.mdx §2.2) passes for all three roles, including negative cases; a staff member of station A cannot act on station B's items. *(Vitest, one test per action×role cell.)*
 - **AC-AUTH-04** Login is email+password only: no social provider buttons or phone-OTP flows exist anywhere in the UI or API surface. *(Code review + e2e signup happy path.)*
 
 ### Reports & forms
@@ -192,11 +194,11 @@ Grouped by area. Each is phrased to be automatable (unit via Vitest, integration
 ### Lifecycle & ops
 
 - **AC-OPS-01** Reports expire at `TTL+60` unless `VERIFIED`/`RETURNED`; the expire job is idempotent; expired reports are read-only (BR-25).
-- **AC-OPS-02** All four cron endpoints reject requests without the bearer `CRON_SECRET`.
+- **AC-OPS-02** *(Planned, not implemented.)* All four cron endpoints reject requests without the bearer `CRON_SECRET`. The current MVP has no cron endpoints.
 - **AC-OPS-03** Photo deposit: files >5 MB or wrong type are rejected **before** upload; per-kind count limits are enforced server-side; browser re-encode strips EXIF/GPS (BR-12). *(Integration limit tests + manual EXIF check.)*
 - **AC-OPS-04** Every notification event in PRD §9 creates a `Notification` row with channel/status; send failures never fail the triggering request.
 
-**Definition of done for today (Nov 2):** sections 1–3 reviewed against ARCHITECTURE.md §5 and PRD §6; AC list accepted as the QA baseline; tomorrow's migration work (Nov 3) implements §2 as Prisma schemas + raw SQL migration.
+**Definition of done for today (Nov 2):** sections 1–3 reviewed against HANDOVER.mdx §5 and PRD §6; AC list accepted as the QA baseline; tomorrow's migration work (Nov 3) implements §2 as Prisma schemas + raw SQL migration.
 
 ---
 
@@ -227,4 +229,4 @@ Rules that make the matrix enforceable:
 
 1. Every route handler and component reads report data only through this serializer — no raw Prisma returns to the client.
 2. Unit tests instantiate each row of the matrix with fixture data; a stripped field appearing in any serialized output fails the suite (AC-PRIV-02/05).
-3. When a rule changes, change the matrix here, then `PRD.md`/`ARCHITECTURE.md` if needed, then the tests — never just the code.
+3. When a rule changes, change the matrix here, then `PRD.md`/`HANDOVER.mdx` if needed, then the tests — never just the code.

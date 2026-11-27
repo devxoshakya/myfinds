@@ -1,7 +1,9 @@
 # MyFinds: Product Requirements Document (PRD)
 
-> **How to use these docs.** `PRD.md` says **what** to build and the rules it must follow. `ARCHITECTURE.md` says **how** to build it. `DESIGN.md` says **how it looks**. If they disagree: PRD wins on behavior, ARCHITECTURE wins on technical structure, DESIGN wins on visuals.
+> **How to use these docs.** `PRD.md` says **what** to build and the rules it must follow. `HANDOVER.mdx` says **how** to build it. `DESIGN.md` says **how it looks**. If they disagree: PRD wins on behavior, HANDOVER wins on technical structure, DESIGN wins on visuals.
 > Items marked **DEFAULT** are decisions taken so work is not blocked. They are open for the lead to change; change the constant or rule in one place and nothing else should break.
+>
+> **Implementation status.** This is the original product source. The current implementation and deployment are documented in `HANDOVER.mdx`. Where this PRD describes a planned feature or a service that is not in the handover (for example, SendGrid, R2, Redis, cron jobs, or admin tools), the handover is authoritative.
 
 ---
 
@@ -134,7 +136,7 @@ Several owners may have `SUGGESTED` matches on one found report. Pending claims 
 
 ### F-02 Roles and permission check (P0)
 - One function `can(user, action, ctx)` in `packages/shared` decides every permission. Routes never inline role checks.
-- Acceptance: unit tests cover every row of the permission matrix in ARCHITECTURE.md section 6.
+- Acceptance: unit tests cover every row of the permission matrix in HANDOVER.mdx §2.2.
 
 ### F-03 Place picker and places data (P0)
 - Four-step picker: State, City, Place type, Station (searchable). Each step is disabled until the previous is set. Data is served by `GET /api/places`.
@@ -152,7 +154,7 @@ Several owners may have `SUGGESTED` matches on one found report. Pending claims 
 - Acceptance: finder custody without a question fails validation; station custody creates `SUBMITTED_TO_STOP` and emails that station's staff; counter drop-off creates `RECEIVED_BY_STOP`.
 
 ### F-06 Photo upload (P0)
-- Browser asks for a presigned upload URL, re-encodes the image, uploads straight to R2, then confirms. Server checks the object exists, type, and size before saving the key.
+- Browser asks for a presigned upload URL, re-encodes the image, uploads straight to S3-compatible private storage, then confirms. Server checks the object exists, type, and size before saving the key.
 - Acceptance: files over 5 MB or wrong type are rejected before upload; upload limits per kind are enforced server-side; photos are never reachable by a public URL.
 
 ### F-07 Station staff tools (P0)
@@ -189,12 +191,12 @@ Several owners may have `SUGGESTED` matches on one found report. Pending claims 
 - Acceptance: each override requires a note and writes `StatusHistory`.
 
 ### F-14 Notifications (P1)
-- Email through SendGrid. Events and recipients are in section 9.
-- Acceptance: each event creates a `Notification` row with channel, status, and provider id; failures are retried by the daily job and never block the request.
+- Email through Resend. The implemented event is claim approval; see `HANDOVER.mdx` §3.11.
+- Acceptance: each send creates a `Notification` row with channel, status, and provider id; failures never block the request. No automatic retry job is implemented in the current MVP.
 
 ### F-15 Expiry and station reminders (P1)
-- Daily jobs: expire reports, send expiry warnings (7 days before), remind stations about unconfirmed receipts, retry matching, delete retained photos.
-- Acceptance: jobs are idempotent and only run with the cron secret header.
+- Planned daily jobs: expire reports, send expiry warnings (7 days before), remind stations about unconfirmed receipts, retry matching, delete retained photos.
+- Status: not implemented in the current MVP. Report expiry is logical (matching filters on `expiresAt`); there is no cron worker in the repo.
 
 ### F-16 PWA (P1)
 - Web manifest, installable, offline app shell with a friendly offline page.
@@ -208,7 +210,7 @@ All live in `packages/shared/src/config.ts` and can be overridden by env vars.
 | --- | --- | --- |
 | `REPORT_TTL_DAYS` | 60 | BR-25 |
 | `PHOTO_RETENTION_DAYS` | 30 | BR-26 |
-| `MATCH_MIN_SCORE` | 0.50 | BR-09 |
+| `MATCH_MIN_SCORE` | 0.65 | BR-09 |
 | `MATCH_MAX_PER_REPORT` | 5 | BR-09 |
 | `MATCH_DATE_WINDOW_DAYS` | 30 | BR-08, BR-09 |
 | `MAX_CLAIM_ATTEMPTS` | 3 | BR-17 |

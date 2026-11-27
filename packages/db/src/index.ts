@@ -7,7 +7,7 @@ export { ClaimDecision, MatchStatus, ReportStatus } from "../prisma/generated/cl
 
 // DB is Supabase Postgres. Runtime traffic goes through the pooled
 // (transaction-mode) connection URL; migrations/db push use DIRECT_URL in
-// prisma.config.ts. See docs/ARCHITECTURE.md §4 and docs/model.md.
+// prisma.config.ts. See docs/HANDOVER.mdx and docs/model.md.
 export function createPrismaClient(env: DatabaseConfig) {
   const adapter = new PrismaPg({
     connectionString: env.DATABASE_URL,

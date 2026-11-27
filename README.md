@@ -1,135 +1,230 @@
 # MyFinds
 
-Lost & found for the Delhi-NCR transport network. Commuters file lost-item reports, a rule-based engine matches them against found reports and the checked-in transport directory (DMRC, Indian Railways, DTC, ISBT), and station staff run the claim → handover flow with 6-digit one-time codes.
+**Lost & found for the Delhi-NCR transport network.** Report a lost or found item at any metro, railway, or bus station. MyFinds matches it, verifies the owner, and moves it through a private handover with a one-time code.
 
-Live: web at `myfinds-web.vercel.app`, server at `myfinds-server.vercel.app`
-Demo credentials: see [`docs/DEMO_CREDENTIALS.md`](docs/DEMO_CREDENTIALS.md)
+[Live web](https://myfinds-web.vercel.app) · [Live API](https://myfinds-server.vercel.app) · [Handover document](docs/HANDOVER.mdx) · [Demo credentials](docs/DEMO_CREDENTIALS.md)
 
-## Stack
+![MyFinds landing page](docs/screenshots/00-hero.jpg)
 
-- **Next.js** (App Router) + Tailwind + shadcn/ui + Serwist PWA — `apps/web`
-- **Express** on Bun — `apps/server`, deployed to Vercel with zero config (framework auto-detected)
-- **Prisma** + PostgreSQL (driver adapters, `pg_trgm` search) — `packages/db`
-- **Better Auth** (email/password) — `packages/auth`
-- **Shared validation & matching rules** — `packages/shared`
-- **Cloudflare R2** for private photo storage
-- **Turborepo** + bun workspaces
+## Why
 
-## Structure
+A lost phone or wallet usually starts a chain of phone calls, notice boards, and station counters that do not share a record. MyFinds gives both sides one private record:
 
+- The owner files a **lost** report with the item details and the place/date.
+- A finder files a **found** report and chooses to keep the item or hand it to a station.
+- A rule-based engine produces a ranked shortlist with a transparent score.
+- The owner **claims** a match by answering hidden verification questions.
+- The finder or station staff **approve** the claim and issue a 6-digit handover code.
+- The code is entered at handover; the item is marked returned.
+
+No public browsing, no chat, no contact details exchanged before approval.
+
+## What works
+
+- Email/password accounts with `USER`, `STATION_STAFF`, and `ADMIN` roles.
+- Lost/found report wizard with a fixed 339-place Delhi-NCR directory.
+- Private photo uploads (presigned S3 flow, 5 MB limit, signed reads).
+- Rule-based matching: category, city, station, date, text, colour, brand.
+- Score breakdown and plain-language match reasons.
+- Claims with verification questions and three attempts per match.
+- Custodian review: finder holding the item, station staff, or admin.
+- One-time 6-digit handover code, AES-256-GCM encrypted at rest, 48-hour expiry.
+- Handover confirmation with constant-time code verification.
+- Station staff console: receipt confirmation, match review, claim queue, handover.
+- Private status link with timeline and rate limiting.
+- Resend emails to claimant and finder after approval. The claimant gets the code; the finder never does.
+- Append-only status history and privacy/leak tests.
+
+## Screenshots
+
+| Report a lost item | Potential matches |
+| --- | --- |
+| ![Lost report form](docs/screenshots/03-report-lost.jpg) | ![Potential matches](docs/screenshots/08-potential-matches.jpg) |
+
+| Staff match review | Found report status |
+| --- | --- |
+| ![Staff match review](docs/screenshots/09-staff-match-review.jpg) | ![Found report status](docs/screenshots/10-found-report-status.jpg) |
+
+More screenshots: [`docs/screenshots/`](docs/screenshots/).
+
+## Architecture
+
+```mermaid
+flowchart LR
+  U[Commuter / Finder] --> W[Next.js web<br/>Vercel]
+  S[Station staff / Admin] --> W
+  W -->|HTTPS + cookies| A[Express API<br/>Vercel functions]
+  A -->|Prisma + pg| DB[(Supabase Postgres)]
+  A -->|S3 protocol| ST[(Supabase Storage<br/>private bucket)]
+  A -->|REST| R[Resend]
+  R --> E[Email inboxes]
+  W -->|presigned upload/read| ST
 ```
-apps/web        Next.js client (port 3001)
-apps/server     Express API (port 3000, Vercel function)
-packages/db     Prisma schema, generated client, seed
-packages/auth   Better Auth config + adapters
-packages/shared Zod schemas, matching rules, transport catalog
-packages/ui     shadcn/ui primitives
+
+```text
+myfinds/
+├── apps/
+│   ├── web/                  Next.js 16 App Router UI (port 3001)
+│   └── server/               Express 5 API on Bun (port 3000)
+├── packages/
+│   ├── auth/                 Better Auth config
+│   ├── db/                   Prisma multi-file schema, client, seed, SQL
+│   ├── shared/               Zod schemas, matching rules, transport catalog
+│   ├── ui/                   shadcn/ui primitives
+│   └── config/               Shared TypeScript config
+├── docs/                     Product, design, model, handover, screenshots
+├── .vercelignore             Keeps CLI deploys under Vercel's 100 MB limit
+└── turbo.json                Task graph
 ```
 
-## Getting started
+### Stack
+
+| Layer | Technology |
+| --- | --- |
+| Monorepo | Bun workspaces + Turborepo |
+| Web | Next.js 16, React 19, Tailwind 4, shadcn/ui |
+| API | Express 5 on Bun, deployed as Vercel functions |
+| Auth | Better Auth + Prisma adapter |
+| ORM / DB | Prisma 7 + `@prisma/adapter-pg`, PostgreSQL (Supabase) |
+| Search | `pg_trgm` + generated `tsvector` column |
+| Photos | Supabase Storage via S3 protocol, private bucket |
+| Email | Resend |
+| Validation | Zod 4, shared client/server schemas |
+| Tests | Bun test (server), Vitest + Testing Library (web) |
+
+## Quick start
+
+### Prerequisites
+
+- Bun `1.4.2`
+- Node.js 24
+- PostgreSQL (Supabase recommended: pooled runtime URL + direct migration URL)
+- An S3-compatible private bucket (Supabase Storage, R2, or S3)
+- A Resend API key for email
+
+### Install
 
 ```bash
+git clone https://github.com/devxoshakya/myfinds.git
+cd myfinds
 bun install
-bun run db:generate          # prisma generate (after schema changes too)
-bun run db:push              # apply schema
-bun run db:seed              # Delhi seed data
-bun run dev                  # turbo dev (web + server)
 ```
 
-Env lives in `apps/server/.env` (server) and web/db via varlock-encrypted env files. Copy `apps/server/.env.example` and `apps/web/.env.example` to get started. Vars: `DATABASE_URL`, `DIRECT_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CORS_ORIGIN`, R2 keys, `RESEND_API_KEY`, `EMAIL_FROM`, `APP_URL`.
-
-## Tests & checks
+### Configure
 
 ```bash
-cd apps/server && bun test   # 74 tests
-cd apps/web && bun test      # vitest
-bun run check-types          # turbo, whole monorepo
+cp apps/server/.env.example apps/server/.env
+cp apps/web/.env.example apps/web/.env
 ```
 
-Run tests per package — running `bun test` at the root gives false failures.
+Fill in `apps/server/.env` and `apps/web/.env`. The important server variables:
 
-## Deploying
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Pooled Postgres runtime URL |
+| `DIRECT_URL` | Direct Postgres URL for Prisma CLI |
+| `BETTER_AUTH_SECRET` | Auth signing + handover-code key derivation |
+| `BETTER_AUTH_URL` | API origin (`http://localhost:3000`) |
+| `CORS_ORIGIN` | Web origin (`http://localhost:3001`) |
+| `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET_NAME` | Private photo storage |
+| `RESEND_API_KEY` | Resend API key |
+| `EMAIL_FROM` | Sender identity; defaults to `MyFinds <onboarding@resend.dev>` |
+| `APP_URL` | Public web URL used in email links |
 
-Both projects deploy manually to Vercel (CI/CD was removed on purpose):
+Web:
+
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_SERVER_URL` | API origin (`http://localhost:3000`) |
+
+See [`docs/HANDOVER.mdx`](docs/HANDOVER.mdx) for the full reference and production values.
+
+### Database
 
 ```bash
-cd apps/server
-npx vercel@latest build --prod     # local prebuilt build
-vercel deploy --prebuilt           # preview, then promote when green
+set -a
+. ./apps/server/.env
+set +a
+
+bun run db:generate
+bun run db:push
+bun run db:seed
+
+# Generated columns and the append-only trigger are raw SQL.
+cd packages/db
+bunx --bun prisma db execute --file prisma/sql/extensions.sql
 ```
 
-- The server's `vercel.json` buildCommand sources `apps/server/.env` when present (for `db:generate`) and runs `scripts/materialize-deps.mjs`, which makes the workspace packages and better-auth loadable inside Vercel's function runtime.
-- On Vercel (not local) build env comes from Project Settings — no `.env` needed there.
-- After a `vercel build`, run `bun install` once to restore the `@myfinds` symlinks for local dev.
+### Run
 
-Full guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) · Architecture & rules: [`docs/Plan.md`](docs/Plan.md) · [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+```bash
+bun run dev
+```
 
-## Day-wise progress
+- Web: `http://localhost:3001`
+- API: `http://localhost:3000`
 
-### Nov 03–05 — foundation & reports
-- [x] Repo scaffolded (Better-T-Stack), monorepo + auth + DB wired
-- [x] Shared report validation package (Zod schemas client + server)
-- [x] Report submission + status integration end-to-end
+### Demo accounts
 
-### Nov 06 — photos, seed, matching
-- [x] Cloudflare R2 photo uploads (private buckets, presigned)
-- [x] Delhi-NCR seed data + `pg_trgm` search
-- [x] Rule-based report matching engine (weighted: place/text/date/attributes)
-- [x] Transport directory search expanded (DMRC + more operators)
+| Role | Email | Password |
+| --- | --- | --- |
+| Station staff | `staff@myfinds.pro` | `staff123` |
+| Admin | `admin@myfinds.pro` | `admin123` |
 
-### Nov 07 — matching flow & frontend review
-- [x] Matching flow complete on frontend
-- [x] Frontend review fixes merged
+These are demo-only and must be rotated before a real launch. See [`docs/DEMO_CREDENTIALS.md`](docs/DEMO_CREDENTIALS.md) for how they are created.
 
-### Nov 10–13 — matching & frontend polish
-- [x] Matching + frontend review work completed (PR #7)
+## Tests and checks
 
-### Nov 13 — staff console, claims & handover
-- [x] Staff console, claim pipeline, handover codes (AES-256-GCM, one-time, constant-time verify)
-- [x] Vercel deploy setup for server + web projects
-- [x] CI/CD pipeline removed (manual deploys)
+```bash
+cd apps/server && bun test        # 81 pass
+cd apps/web && bun run test       # 32 pass (Vitest)
+bun run check-types               # 6/6 packages
+bun run build                     # requires server env for db:generate
+```
 
-### Nov 13 — deploy hardening (Vercel)
-- [x] Varlock removed from the server app entirely; env read via `process.env`
-- [x] Zero-config Express on Vercel: no `api/` folder, no rewrites, no custom bundler; `export default app` entry
-- [x] Function emits CommonJS (`module: "commonjs"`) so extensionless relative imports resolve
-- [x] Hoisted bun linker + `materialize-deps.mjs`: workspace packages shipped as compiled CJS copies (packer strips symlinks)
-- [x] Prisma generated client compiled to CJS in the deployed copies
-- [x] better-auth (ESM-only) compiled to CJS and registered under the `require` export condition
-- [x] Mid-file import in `transport-catalog.ts` moved to top (ESM hoisting vs CJS order)
-- [x] Web `turbopack.resolveAlias` restored for `@myfinds/*`
-- [x] Verified end-to-end: function module graph loads under plain Node, 38 server tests + typecheck green, web build green, live server responds (root + sign-in)
+Run `bun run test` for the web app, not `bun test`; the web suite uses Vitest.
 
-### Nov 16 — staff auth & access
-- [x] Better Auth sign-in for staff
-- [x] Server-side role guards on all `/staff` routes (staff/admin only)
+## Deploy
 
-### Nov 17 — staff queue & verification view
-- [x] `/staff` queue of suggested matches sorted by score
-- [x] Side-by-side match verification revealing hidden details strictly to staff
+Two Vercel projects:
 
-### Nov 18 — status machine
-- [x] Status transition service (`/api/report-status`, timeline lookup by token)
-- [x] Approve/reject transitions refuse illegal state jumps (e.g. rejection frees the lost report)
+| Project | Root directory | Build |
+| --- | --- | --- |
+| `myfinds-web` | `apps/web` | `bun run build` |
+| `myfinds-server` | `apps/server` | `bun run db:generate && node scripts/materialize-deps.mjs` |
 
-### Nov 19 — owner & staff verification
-- [x] Owner flow after approval: claim a match ("this is mine") with verification questions
-- [x] Staff verification step with required decision
+Deploy from the **repo root** so Vercel can apply each project's root directory:
 
-### Nov 20 — privacy & abuse
-- [x] Leak tests: secret owner details never appear in unauthorized responses
-- [x] Rate limiting (per-IP windows on report submission and status lookups, claim/code attempt limits)
+```bash
+vercel --prod --yes --project myfinds-server
+vercel --prod --yes --project myfinds-web
+```
 
-### Nov 23 — handover
-- [x] Handover flow: ready-for-handover → one-time 6-digit code (AES-256-GCM encrypted at rest, expiring) → confirm receipt
-- [x] `RETURNED` transition wired: both reports get `closedAt`, the match `COMPLETED`, sibling suggestions `DISMISSED` (BR-20)
-- [x] Station handover records the ID **type** only (BR-21)
+Production env:
 
-### Nov 26 — launch prep
-- [x] Documentation finalized (ARCHITECTURE, DEPLOYMENT, Plan, PRD, demo credentials)
-- [x] Server deployed to Vercel and verified live (web deploy pending)
+- Server: `DATABASE_URL`, `DIRECT_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CORS_ORIGIN`, `S3_*`, `RESEND_API_KEY`, `EMAIL_FROM`, `APP_URL`.
+- Web: `NEXT_PUBLIC_SERVER_URL`.
 
-### Still open
-- [ ] Nov 24–25: external usability sessions, regression checklist, accessibility pass
-- [ ] Nov 27: teach-backs, fresh-clone demo, post-MVP backlog
-- [ ] Web app deploy to Vercel
+`BETTER_AUTH_URL` is the API URL. `CORS_ORIGIN` and `APP_URL` are the web URL.
+
+> **Resend note:** `onboarding@resend.dev` only delivers to the Resend account owner's email. Verify a domain in Resend and update `EMAIL_FROM` before emailing real users.
+
+## Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [`docs/HANDOVER.mdx`](docs/HANDOVER.mdx) | Full handover: product, flows, architecture, setup, deploy, security, tests, limitations |
+| [`docs/PRD.md`](docs/PRD.md) | Product requirements and behavior rules |
+| [`docs/DESIGN.md`](docs/DESIGN.md) | Visual system and UI rules |
+| [`docs/model.md`](docs/model.md) | Data model and invariants |
+| [`docs/DEMO_CREDENTIALS.md`](docs/DEMO_CREDENTIALS.md) | Demo staff/admin accounts |
+
+## Known limitations
+
+- No CI workflow; tests and type-check run locally before deploy.
+- Rate limits are in-memory per serverless instance, not distributed.
+- No queue or cron: emails are best-effort, report expiry is logical, and photos are not automatically purged.
+- No email verification or password reset yet.
+- No admin UI for stations/staff; use the seed and `staff:create`.
+- `onboarding@resend.dev` is demo-only; verify a domain for real recipients.
+- Matching is rule-based; there is no AI or image recognition.
